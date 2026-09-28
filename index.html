@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hearth — Personal Health &amp; Home Hub</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">H</div>
+      <div>
+        <div class="brand-name">Hearth</div>
+        <div class="brand-sub">Health &amp; home hub</div>
+      </div>
+    </div>
+    <nav class="nav" id="nav"></nav>
+    <div class="sidebar-foot">Planner mode: Hearth drafts and proposes.<br>You approve — nothing is ever sent or ordered.</div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div>
+        <h1 id="viewTitle">Chat</h1>
+        <div class="sub" id="viewSub">Talk to Hearth</div>
+      </div>
+      <div class="profile-wrap">
+        <label for="profileSelect">Profile</label>
+        <select id="profileSelect" style="width:auto;min-width:130px"></select>
+        <button class="btn btn-ghost btn-sm" id="addProfileBtn" title="Add profile">+ New</button>
+      </div>
+    </header>
+
+    <div class="content">
+      <!-- CHAT -->
+      <section class="view active" id="view-chat">
+        <div class="card chat-wrap">
+          <div class="quick-row" id="chatQuick"></div>
+          <div class="chat-log" id="chatLog"></div>
+          <div class="chat-input-row">
+            <input type="text" id="chatInput" placeholder="Try &quot;plan my meals this week&quot; or &quot;log 7 hours of sleep&quot;" autocomplete="off">
+            <button class="btn btn-primary" id="chatSend">Send</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- MEALS -->
+      <section class="view" id="view-meals">
+        <div class="card">
+          <h2>Meal planner</h2>
+          <p class="lede">Generate a week of meals, then build the grocery list and prep a cart for approval.</p>
+          <div class="form-row">
+            <div><label class="f" for="dietSel">Diet</label><select id="dietSel"></select></div>
+            <div><label class="f" for="servingsIn">Servings</label><input type="number" id="servingsIn" min="1" max="12" value="2"></div>
+            <div style="display:flex;align-items:flex-end"><button class="btn btn-primary" id="genPlanBtn">Generate plan</button></div>
+          </div>
+        </div>
+        <div id="planOut"></div>
+        <div class="card">
+          <h2>Grocery carts</h2>
+          <p class="lede">Planner mode: carts are prepared for you to take to the store. Nothing is ordered.</p>
+          <div id="cartsOut"></div>
+        </div>
+      </section>
+
+      <!-- HEALTH -->
+      <section class="view" id="view-health">
+        <div class="grid2">
+          <div class="card">
+            <h2>Log today</h2>
+            <p class="lede">Quick manual logging. One entry per metric per day.</p>
+            <div id="logForm"></div>
+          </div>
+          <div class="card">
+            <h2>Apple Health import</h2>
+            <p class="lede">Export from iPhone: Health app &gt; profile picture &gt; Export All Health Data, then attach the export.xml here. Parsed locally — nothing leaves this browser.</p>
+            <input type="file" id="ahFile" accept=".xml,text/xml">
+            <div class="btn-row"><button class="btn btn-ghost" id="ahImportBtn">Parse &amp; import</button></div>
+            <div id="ahOut" class="meta" style="font-size:13px;color:var(--muted)"></div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Trends <span class="pill" id="healthN"></span></h2>
+          <p class="lede">Last 14 days. Hand-rolled charts — no external libraries.</p>
+          <div id="chartsOut"></div>
+        </div>
+        <div class="card">
+          <h2>Predictive nudges</h2>
+          <div id="nudgesOut"></div>
+        </div>
+      </section>
+
+      <!-- SCHEDULE -->
+      <section class="view" id="view-schedule">
+        <div class="grid2">
+          <div class="card">
+            <h2>Tasks</h2>
+            <div class="form-row">
+              <div style="flex:2"><input type="text" id="taskTitle" placeholder="New task"></div>
+              <div><input type="date" id="taskDue"></div>
+              <div style="flex:0"><button class="btn btn-primary" id="taskAdd">Add</button></div>
+            </div>
+            <div id="tasksOut"></div>
+          </div>
+          <div class="card">
+            <h2>Calendar</h2>
+            <div class="form-row">
+              <div style="flex:2"><input type="text" id="evTitle" placeholder="Event title"></div>
+              <div><input type="date" id="evDate"></div>
+            </div>
+            <div class="form-row">
+              <div><input type="time" id="evStart"></div>
+              <div><input type="time" id="evEnd"></div>
+              <div><input type="text" id="evAtt" placeholder="Attendees (comma separated)"></div>
+              <div style="flex:0"><button class="btn btn-primary" id="evAdd">Add</button></div>
+            </div>
+            <div id="conflictOut"></div>
+            <div id="weekOut"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- COMMS -->
+      <section class="view" id="view-comms">
+        <div class="notice"><strong>Planner mode.</strong> Hearth drafts emails and call scripts for your approval. Nothing is ever sent or dialed from here — you send it yourself.</div>
+        <div class="grid2">
+          <div class="card">
+            <h2>Email drafts</h2>
+            <div class="form-row">
+              <div><label class="f" for="tplSel">Template</label><select id="tplSel"></select></div>
+              <div><label class="f" for="toneSel">Tone</label><select id="toneSel"></select></div>
+            </div>
+            <div class="form-row">
+              <div><label class="f" for="emTo">To</label><input type="text" id="emTo" placeholder="name@example.com"></div>
+              <div><label class="f" for="emName">Recipient name</label><input type="text" id="emName"></div>
+            </div>
+            <div style="margin-bottom:12px"><label class="f" for="emCtx">Context (one fact per line: key: value)</label><textarea id="emCtx" placeholder="summary: discussed the kitchen remodel&#10;next1: send measurements&#10;availability: Tuesday afternoons"></textarea></div>
+            <button class="btn btn-primary" id="draftEmailBtn">Draft email</button>
+            <div id="draftsOut" style="margin-top:16px"></div>
+          </div>
+          <div class="card">
+            <h2>Call scripts</h2>
+            <div class="form-row">
+              <div><label class="f" for="callSel">Scenario</label><select id="callSel"></select></div>
+            </div>
+            <div style="margin-bottom:12px"><label class="f" for="callCtx">Details (key: value per line)</label><textarea id="callCtx" placeholder="purpose: dentist checkup&#10;availability: weekday mornings"></textarea></div>
+            <button class="btn btn-primary" id="callScriptBtn">Generate script</button>
+            <div id="scriptOut" style="margin-top:16px"></div>
+            <h3>Follow-up queue</h3>
+            <div class="form-row">
+              <div><input type="text" id="fuWho" placeholder="Who"></div>
+              <div><input type="text" id="fuAbout" placeholder="About"></div>
+              <div><input type="date" id="fuDue"></div>
+              <div style="flex:0"><button class="btn btn-ghost" id="fuAdd">Add</button></div>
+            </div>
+            <div id="fuOut"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SHEETS -->
+      <section class="view" id="view-sheets">
+        <div class="card">
+          <h2>Spreadsheets</h2>
+          <p class="lede">Simple editable grids with CSV import/export. Good for budgets, packing lists, comparisons.</p>
+          <div class="form-row">
+            <div><input type="text" id="sheetName" placeholder="Sheet name"></div>
+            <div style="flex:0"><button class="btn btn-primary" id="sheetNew">New sheet</button></div>
+            <div style="flex:0"><button class="btn btn-ghost" id="sheetImportBtn">Import CSV</button></div>
+            <input type="file" id="csvFile" accept=".csv,text/csv" style="display:none">
+          </div>
+          <div class="tabs" id="sheetTabs"></div>
+          <div id="sheetOut"></div>
+        </div>
+      </section>
+
+      <!-- RESEARCH -->
+      <section class="view" id="view-research">
+        <div class="notice"><strong>Drafted locally.</strong> Briefs are built from a template in this version — live web research is a future hosted upgrade. Always verify specifics against current sources.</div>
+        <div class="card">
+          <h2>New research brief</h2>
+          <div class="form-row">
+            <div style="flex:2"><label class="f" for="resTopic">Topic</label><input type="text" id="resTopic" placeholder="e.g. best robot vacuum under $300"></div>
+            <div><label class="f" for="resDepth">Depth</label><select id="resDepth"></select></div>
+            <div style="display:flex;align-items:flex-end"><button class="btn btn-primary" id="resGen">Generate brief</button></div>
+          </div>
+        </div>
+        <div id="briefsOut"></div>
+      </section>
+
+      <!-- BRIEFING -->
+      <section class="view" id="view-briefing">
+        <div class="card">
+          <h2 id="briefGreet">Morning briefing</h2>
+          <p class="lede">Your day, your tasks, your health, and what needs attention — generated from your own data.</p>
+          <div class="btn-row" style="margin-top:0;margin-bottom:16px">
+            <button class="btn btn-primary" id="briefGen">Regenerate</button>
+            <button class="btn btn-ghost" id="weekRevBtn">Weekly review</button>
+          </div>
+          <div id="briefOut"></div>
+          <div id="weekRevOut"></div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/data.js"></script>
+<script src="js/store.js"></script>
+<script src="js/meals.js"></script>
+<script src="js/health.js"></script>
+<script src="js/schedule.js"></script>
+<script src="js/comms.js"></script>
+<script src="js/sheets.js"></script>
+<script src="js/research.js"></script>
+<script src="js/proactive.js"></script>
+<script src="js/chat.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
