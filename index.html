@@ -59,6 +59,33 @@
         </div>
         <div id="planOut"></div>
         <div class="card">
+          <h2>Pantry</h2>
+          <p class="lede">What's already in the kitchen — the grocery list subtracts it automatically, and expiring items get used first.</p>
+          <div class="form-row">
+            <div style="flex:2"><input type="text" id="pantryName" placeholder="Item — e.g. Chicken breast"></div>
+            <div><input type="number" id="pantryQty" min="0" step="any" placeholder="Qty"></div>
+            <div><input type="text" id="pantryUnit" placeholder="Unit — e.g. lb"></div>
+            <div><input type="date" id="pantryExp" aria-label="Expiry date"></div>
+            <div style="flex:0;display:flex;align-items:flex-end"><button class="btn btn-primary" id="pantryAdd">Add</button></div>
+          </div>
+          <div id="pantryWarn"></div>
+          <div id="pantryOut"></div>
+          <div id="pantryRecipes"></div>
+        </div>
+        <div class="card">
+          <h2>Grocery budget</h2>
+          <p class="lede">Log what each shop actually costs and watch it against a monthly budget.</p>
+          <div class="form-row">
+            <div><label class="f" for="budgetIn">Monthly budget ($)</label><input type="number" id="budgetIn" min="0" step="any" placeholder="e.g. 600"></div>
+            <div style="display:flex;align-items:flex-end"><button class="btn btn-ghost" id="budgetSave">Set budget</button></div>
+            <div><label class="f" for="spendAmt">Trip cost ($)</label><input type="number" id="spendAmt" min="0" step="any" placeholder="e.g. 84.20"></div>
+            <div><label class="f" for="spendDate">Date</label><input type="date" id="spendDate"></div>
+            <div style="flex:2"><label class="f" for="spendNote">Note</label><input type="text" id="spendNote" placeholder="Weekly shop"></div>
+            <div style="flex:0;display:flex;align-items:flex-end"><button class="btn btn-primary" id="spendAdd">Log trip</button></div>
+          </div>
+          <div id="budgetOut"></div>
+        </div>
+        <div class="card">
           <h2>Grocery carts</h2>
           <p class="lede">Planner mode: carts are prepared for you to take to the store. Nothing is ordered.</p>
           <div id="cartsOut"></div>
@@ -84,6 +111,7 @@
         <div class="card">
           <h2>Trends <span class="pill" id="healthN"></span></h2>
           <p class="lede">Last 14 days. Hand-rolled charts — no external libraries.</p>
+          <div id="sleepDebtOut"></div>
           <div id="chartsOut"></div>
         </div>
         <div class="card">

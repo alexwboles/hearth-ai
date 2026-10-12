@@ -177,8 +177,33 @@ function markStapleBought(name) {
   return bought[name];
 }
 
+// Sleep debt: rolling per-night deficits vs a nightly target (default 8h).
+// Surpluses never repay the debt — only missed sleep counts.
+function sleepDebt(days, target, today) {
+  days = Math.max(1, Math.min(31, days || 7));
+  target = target || 8;
+  const end = today ? new Date(today + "T12:00:00") : new Date();
+  const byDay = {};
+  getLogs("sleep").forEach(l => { byDay[l.date] = l.value; });
+  let debt = 0, logged = 0, sum = 0;
+  const rows = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const k = dayKey(new Date(end.getTime() - i * 864e5));
+    const slept = byDay[k] != null ? byDay[k] : null;
+    const diff = slept == null ? null : Math.round((slept - target) * 10) / 10;
+    if (diff != null) { logged++; sum += slept; if (diff < 0) debt = Math.round((debt + diff) * 10) / 10; }
+    rows.push({ date: k, slept, diff });
+  }
+  return {
+    days, target, debt, logged,
+    avg: logged ? Math.round((sum / logged) * 10) / 10 : null,
+    rows
+  };
+}
+
 const api = { dayKey, logEntry, getLogs, weeklyAverages, trendSeries,
-              parseAppleHealthXML, importAppleHealth, nudges, markStapleBought };
+              parseAppleHealthXML, importAppleHealth, nudges, markStapleBought,
+              sleepDebt };
 
 if (typeof window !== "undefined") window.HearthHealth = api;
 if (typeof module !== "undefined" && module.exports) module.exports = api;

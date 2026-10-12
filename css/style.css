@@ -227,3 +227,24 @@ table.data tr:last-child td { border-bottom: 0; }
   .msg { max-width: 92%; }
   .chat-wrap { height: calc(100vh - 240px); }
 }
+
+/* ---------- feature batch: pantry, budget, sleep debt ---------- */
+.warnbox {
+  border: 1px solid #d9a441; border-left: 4px solid #d9a441; background: #fffdf4;
+  border-radius: 0; padding: 10px 14px; margin: 12px 0; font-size: 13.5px;
+}
+.meter { height: 10px; background: #e8e4d8; border-radius: 0; overflow: hidden; }
+.meter-fill { display: block; height: 100%; background: #4c8c5a; border-radius: 0; }
+.meter-fill.bad { background: #c0392b; }
+.have { color: #4c8c5a; font-weight: 600; }
+.over { color: #c0392b; font-weight: 700; }
+.debt-card { margin-bottom: 18px; }
+.debt-card h3 { margin: 0 0 6px; font-size: 15px; }
+.debt-row { display: flex; align-items: center; gap: 10px; margin: 5px 0; font-size: 13px; }
+.debt-day { width: 44px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.debt-bar { flex: 1; height: 12px; background: #eee9da; border-radius: 0; overflow: hidden; }
+.debt-bar i { display: block; height: 100%; border-radius: 0; }
+.debt-bar i.good { background: #4c8c5a; }
+.debt-bar i.bad { background: #d9a441; }
+.debt-bar i.dim { background: #cfc9b8; }
+.debt-val { width: 92px; text-align: right; font-variant-numeric: tabular-nums; }

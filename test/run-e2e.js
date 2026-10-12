@@ -189,4 +189,68 @@ ok("chat assistant flows", () => {
   assert.strictEqual(chat.getLog().length, 1);
 });
 
-console.log("\nAll " + n + " e2e flows passed.");
+
+// 9. Pantry -> grocery list coverage -> prep cart minus pantry.
+ok("pantry coverage and prep-cart-minus-pantry", () => {
+  store.createProfile("H");
+  const plan = meals.generatePlan({ diet: "none", servings: 2, days: 2, startOffset: 0 });
+  const list = meals.groceryFromPlan(plan);
+  assert.ok(list.length > 3, "need a real list");
+  // stock the pantry with the first item in full and the second partially
+  meals.addPantryItem({ name: list[0].name, qty: list[0].qty, unit: list[0].unit });
+  meals.addPantryItem({ name: list[1].name, qty: Math.max(0.01, Math.round(list[1].qty / 2 * 100) / 100), unit: list[1].unit });
+  const cov = meals.pantryCoverage(list);
+  assert.strictEqual(cov[0].covered, true, "first item fully covered");
+  assert.strictEqual(cov[1].covered, false, "second item partial");
+  assert.ok(cov[1].need > 0 && cov[1].need < cov[1].qty, "partial need math");
+  const needed = cov.filter(i => i.need > 0).map(i => ({ name: i.name, qty: i.need, unit: i.unit, aisle: i.aisle }));
+  const cart = meals.prepCart(needed, "minus pantry");
+  assert.strictEqual(cart.items.length, list.length - 1, "cart drops the covered item");
+  assert.ok(cart.items.every(i => i.qty > 0), "no zero-qty items");
+});
+
+// 10. Pantry expiry warnings + cook-from-pantry suggestions.
+ok("pantry expiry and cook-from-pantry", () => {
+  store.createProfile("H");
+  const t = meals.todayISO();
+  const plus = (n) => { const d = new Date(t + "T12:00:00"); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+  meals.addPantryItem({ name: "Milk", qty: 1, unit: "gal", expires: plus(2) });
+  meals.addPantryItem({ name: "Yogurt", qty: 2, unit: "cups", expires: plus(10) });
+  const exp = meals.expiringPantry(4, t);
+  assert.strictEqual(exp.length, 1);
+  assert.strictEqual(exp[0].name, "Milk");
+  const sug = meals.recipesUsingPantry(5);
+  assert.ok(Array.isArray(sug), "suggestions return an array");
+});
+
+// 11. Grocery budget tracking across months.
+ok("grocery budget month totals", () => {
+  store.createProfile("H");
+  meals.logGrocerySpend(100, "2026-10-01", "big shop");
+  meals.logGrocerySpend(25.5, "2026-10-15");
+  meals.logGrocerySpend(75, "2026-09-20");
+  assert.strictEqual(meals.grocerySpendTotal("2026-10"), 125.5);
+  assert.strictEqual(meals.grocerySpendTotal("2026-09"), 75);
+  meals.setGroceryBudget(500);
+  assert.strictEqual(meals.getGroceryBudget(), 500);
+  const pct = meals.grocerySpendTotal("2026-10") / meals.getGroceryBudget();
+  assert.ok(pct < 1, "under budget");
+});
+
+// 12. Sleep debt accumulates deficits over a rolling window.
+ok("sleep debt rolling window", () => {
+  store.createProfile("H");
+  const day = (off) => { const d = new Date(Date.now() - off * 864e5); return d.toISOString().slice(0, 10); };
+  health.logEntry("sleep", 5, new Date(day(3) + "T12:00:00"));
+  health.logEntry("sleep", 8.5, new Date(day(2) + "T12:00:00"));
+  health.logEntry("sleep", 6.5, new Date(day(1) + "T12:00:00"));
+  const d = health.sleepDebt(4, 8, day(0));
+  assert.strictEqual(d.debt, -4.5, "deficits: -3 + -1.5, surplus ignored; got " + d.debt);
+  assert.strictEqual(d.logged, 3);
+  assert.ok(d.rows.every(r => r.diff === null || typeof r.diff === "number"));
+  const d2 = health.sleepDebt(4, 8, day(0));
+  assert.strictEqual(d2.debt, d.debt, "deterministic");
+});
+
+console.log("\\nAll " + n + " e2e flows passed.");
+

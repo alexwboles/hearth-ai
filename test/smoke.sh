@@ -152,5 +152,79 @@ if grep -riE "api[_-]?key|secret|token|password" js/ index.html >/dev/null 2>&1;
 fi
 pass "zero external calls, zero credentials"
 
+
+# 14: pantry — add/remove, expiry warnings, coverage math
+node -e "
+const store = require('./js/store.js'); store.resetForTests(); store.createProfile('H');
+const meals = require('./js/meals.js');
+const a = meals.addPantryItem({ name: 'Chicken breast', qty: 2, unit: 'lb', expires: '2026-10-14' });
+meals.addPantryItem({ name: 'Rice', qty: 5, unit: 'lb' });
+if (meals.listPantry().length !== 2) throw new Error('pantry count');
+const exp = meals.expiringPantry(4, '2026-10-12');
+if (exp.length !== 1 || exp[0].name !== 'Chicken breast') throw new Error('expiry filter: ' + JSON.stringify(exp));
+const cov = meals.pantryCoverage([{ name: 'chicken breast', qty: 3, unit: 'lb' }, { name: 'Rice', qty: 5, unit: 'lb' }, { name: 'Broccoli', qty: 1, unit: 'head' }]);
+if (cov[0].need !== 1 || cov[0].have !== 2) throw new Error('partial coverage: ' + JSON.stringify(cov[0]));
+if (!cov[1].covered || cov[1].need !== 0) throw new Error('full coverage failed');
+if (cov[2].have !== 0 || cov[2].need !== 1) throw new Error('no-stock failed');
+const sug = meals.recipesUsingPantry(3);
+if (!sug.length || !sug.every(x => x.hits > 0)) throw new Error('pantry recipe suggestions empty');
+meals.removePantryItem(a.id);
+if (meals.listPantry().length !== 1) throw new Error('remove failed');
+let threw = false;
+try { meals.addPantryItem({ name: '', qty: 1 }); } catch (e) { threw = true; }
+if (!threw) throw new Error('empty name accepted');
+console.log('OK: coverage + expiry + suggestions');
+" || fail "pantry logic"
+pass "pantry inventory: expiry warnings, coverage math, cook-from-pantry"
+
+# 15: grocery budget — log trips, monthly totals, budget set/clear
+node -e "
+const store = require('./js/store.js'); store.resetForTests(); store.createProfile('H');
+const meals = require('./js/meals.js');
+meals.logGrocerySpend(84.20, '2026-10-05', 'Weekly shop');
+meals.logGrocerySpend(32.50, '2026-10-11', 'Top-up');
+meals.logGrocerySpend(50, '2026-09-28', 'Last month');
+if (meals.grocerySpendTotal('2026-10') !== 116.7) throw new Error('oct total: ' + meals.grocerySpendTotal('2026-10'));
+if (meals.grocerySpendTotal('2026-09') !== 50) throw new Error('sep total wrong');
+meals.setGroceryBudget(400);
+if (meals.getGroceryBudget() !== 400) throw new Error('budget not set');
+meals.setGroceryBudget('');
+if (meals.getGroceryBudget() !== null) throw new Error('budget not cleared');
+const list = meals.listGrocerySpend();
+if (list[0].date !== '2026-10-11') throw new Error('not newest-first');
+meals.removeGrocerySpend(list[0].id);
+if (meals.listGrocerySpend().length !== 2) throw new Error('remove failed');
+let threw = false;
+try { meals.logGrocerySpend(-5, '2026-10-12'); } catch (e) { threw = true; }
+if (!threw) throw new Error('negative spend accepted');
+console.log('OK');
+" || fail "grocery budget logic"
+pass "grocery budget: trip logging, monthly totals, set/clear"
+
+# 16: sleep debt — deficits accumulate, surpluses do not repay
+node -e "
+const store = require('./js/store.js'); store.resetForTests(); store.createProfile('H');
+const health = require('./js/health.js');
+const day = (off) => { const d = new Date(Date.now() - off * 864e5); return d.toISOString().slice(0, 10); };
+health.logEntry('sleep', 6, new Date(day(2) + 'T12:00:00'));
+health.logEntry('sleep', 9.5, new Date(day(1) + 'T12:00:00'));
+health.logEntry('sleep', 7, new Date(day(0) + 'T12:00:00'));
+const d = health.sleepDebt(3, 8, day(0));
+if (d.debt !== -3) throw new Error('debt should be -3 (6h night), got ' + d.debt);
+if (d.logged !== 3) throw new Error('logged count');
+if (d.avg !== 7.5) throw new Error('avg: ' + d.avg);
+if (d.rows.length !== 3 || d.rows[0].date !== day(2)) throw new Error('rows oldest-first');
+const empty = health.sleepDebt(7, 8);
+if (empty.logged !== 3) throw new Error('default window should include the 3 logs');
+console.log('OK: debt=' + d.debt + 'h avg=' + d.avg + 'h');
+" || fail "sleep debt logic"
+pass "sleep debt: rolling deficits vs 8h target"
+
+# 17: UI wiring — pantry, budget, sleep debt
+for id in pantryName pantryQty pantryUnit pantryExp pantryAdd pantryOut pantryWarn pantryRecipes budgetIn budgetSave spendAmt spendDate spendNote spendAdd budgetOut sleepDebtOut prepCartPantryBtn; do
+  grep -q "id=\"$id\"" index.html || grep -q "\"$id\"" js/app.js || fail "missing UI id: $id"
+done
+pass "pantry/budget/sleep-debt UI wired"
+
 echo ""
-echo "All 13 smoke checks passed."
+echo "All 17 smoke checks passed."

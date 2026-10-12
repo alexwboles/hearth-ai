@@ -127,7 +127,81 @@ function renderMeals() {
   const prefs = M.getPrefs();
   $("dietSel").innerHTML = D.DIETS.map(d => '<option value="' + d.id + '"' + (d.id === prefs.diet ? " selected" : "") + ">" + esc(d.name) + "</option>").join("");
   $("servingsIn").value = prefs.servings;
-  renderPlan(); renderCarts();
+  renderPlan(); renderCarts(); renderPantry(); renderBudget();
+}
+
+// ---------- Pantry ----------
+function renderPantry() {
+  const items = M.listPantry();
+  const exp = M.expiringPantry(4);
+  const warn = exp.length
+    ? '<div class="warnbox"><strong>Use soon (' + exp.length + '):</strong> ' +
+      exp.map(x => esc(x.name) + " <span class='meta'>by " + esc(x.expires) + "</span>").join(" · ") + "</div>"
+    : "";
+  $("pantryWarn").innerHTML = warn;
+  $("pantryOut").innerHTML = items.length
+    ? '<table class="data"><tbody>' + items.map(x =>
+      "<tr><td><strong>" + esc(x.name) + "</strong> <span class='meta'>" + x.qty + " " + esc(x.unit) +
+      (x.expires ? " · expires " + esc(x.expires) : "") + "</span></td>" +
+      '<td style="text-align:right"><button class="btn btn-ghost btn-sm" data-pantry-del="' + x.id + '">Remove</button></td></tr>'
+    ).join("") + "</tbody></table>"
+    : '<div class="empty">Pantry is empty — add what you have on hand.</div>';
+  $("pantryOut").querySelectorAll("[data-pantry-del]").forEach(b =>
+    b.addEventListener("click", () => { M.removePantryItem(b.dataset.pantryDel); renderPantry(); }));
+  const sug = M.recipesUsingPantry(3);
+  $("pantryRecipes").innerHTML = sug.length
+    ? '<h3>Cook from the pantry</h3><p class="lede">Recipes using what you already have:</p>' +
+      sug.map(s => '<div class="list-item"><div class="grow"><div class="title">' + esc(s.recipe.name) + "</div>" +
+        '<div class="meta">uses ' + s.hits + " pantry item" + (s.hits === 1 ? "" : "s") + ": " + esc(s.names.join(", ")) + "</div></div></div>").join("")
+    : "";
+}
+
+// ---------- Grocery budget ----------
+function renderBudget() {
+  const ym = M.todayISO().slice(0, 7);
+  const budget = M.getGroceryBudget();
+  $("budgetIn").value = budget != null ? budget : "";
+  const total = M.grocerySpendTotal(ym);
+  const spends = M.listGrocerySpend().filter(s => s.date.slice(0, 7) === ym);
+  let h = "";
+  if (budget != null) {
+    const pct = Math.min(100, Math.round((total / budget) * 100));
+    h += '<div style="margin:12px 0"><div style="display:flex;justify-content:space-between;font-size:14px">' +
+      "<span><strong>$" + total.toFixed(2) + "</strong> of $" + budget.toFixed(2) + " spent in " + esc(ym) + "</span>" +
+      '<span class="' + (pct > 100 ? "over" : "") + '">' + pct + "%</span></div>" +
+      '<div class="meter"><div class="meter-fill' + (pct > 100 ? " bad" : "") + '" style="width:' + Math.min(100, pct) + '%"></div></div></div>';
+  } else {
+    h += '<p class="lede">Set a monthly budget above to track against it. Spent in ' + esc(ym) + ': <strong>$' + total.toFixed(2) + "</strong>.</p>";
+  }
+  h += spends.length
+    ? '<table class="data"><tbody>' + spends.map(s =>
+      "<tr><td><strong>$" + s.amount.toFixed(2) + "</strong> <span class='meta'>" + esc(s.date) +
+      (s.note ? " · " + esc(s.note) : "") + "</span></td>" +
+      '<td style="text-align:right"><button class="btn btn-ghost btn-sm" data-spend-del="' + s.id + '">Remove</button></td></tr>'
+    ).join("") + "</tbody></table>"
+    : '<div class="empty">No grocery trips logged this month.</div>';
+  $("budgetOut").innerHTML = h;
+  $("budgetOut").querySelectorAll("[data-spend-del]").forEach(b =>
+    b.addEventListener("click", () => { M.removeGrocerySpend(b.dataset.spendDel); renderBudget(); }));
+}
+
+// ---------- Sleep debt ----------
+function renderSleepDebt() {
+  const d = H.sleepDebt(7, 8);
+  const out = $("sleepDebtOut");
+  if (!d.logged) { out.innerHTML = ""; return; }
+  const rows = d.rows.map(r => {
+    const w = r.slept == null ? 0 : Math.min(100, (r.slept / 12) * 100);
+    const cls = r.diff == null ? "dim" : r.diff < 0 ? "bad" : "good";
+    return '<div class="debt-row"><span class="debt-day">' + esc(r.date.slice(5)) + "</span>" +
+      '<div class="debt-bar"><i class="' + cls + '" style="width:' + w.toFixed(0) + '%"></i></div>' +
+      '<span class="debt-val">' + (r.slept == null ? "—" : r.slept + "h" + (r.diff < 0 ? " (" + r.diff + ")" : "")) + "</span></div>";
+  }).join("");
+  out.innerHTML = '<div class="debt-card"><h3>Sleep debt — last 7 days</h3>' +
+    '<p class="lede">' + (d.debt < 0
+      ? 'You are <strong class="over">' + Math.abs(d.debt) + 'h</strong> short of 8h/night this week. Avg: ' + d.avg + 'h.'
+      : 'No sleep debt — averaging ' + d.avg + 'h against an 8h target. Keep it up.') + "</p>" +
+    rows + "</div>";
 }
 function renderPlan() {
   const out = $("planOut");
@@ -147,18 +221,35 @@ function renderPlan() {
   });
   const list = M.groceryFromPlan(plan);
   h += "<h3>Grocery list — " + list.length + " items</h3>";
-  M.groupByAisle(list).forEach(g => {
+  const cov = M.pantryCoverage(list);
+  const coveredN = cov.filter(i => i.covered).length;
+  const partialN = cov.filter(i => !i.covered && i.have > 0).length;
+  if (coveredN || partialN) {
+    h += '<p class="lede">Pantry check: <strong>' + coveredN + "</strong> fully covered" +
+      (partialN ? ", <strong>" + partialN + "</strong> partially" : "") + " by what's on hand.</p>";
+  }
+  M.groupByAisle(cov).forEach(g => {
     h += '<div class="aisle-head">' + esc(g.aisle) + "</div>";
     h += '<table class="data"><tbody>' + g.items.map(i =>
       "<tr><td><strong>" + esc(i.name) + "</strong><div class='meta'>" + esc(i.recipes.slice(0, 3).join(", ")) + (i.recipes.length > 3 ? "…" : "") + "</div></td>" +
-      "<td style='text-align:right;white-space:nowrap'>" + i.qty + " " + esc(i.unit) + "</td></tr>").join("") + "</tbody></table>";
+      "<td style='text-align:right;white-space:nowrap'>" + i.qty + " " + esc(i.unit) +
+      (i.have > 0 ? "<div class='meta have'>have " + i.have + (i.need > 0 ? " · buy " + i.need : " · covered") + "</div>" : "") + "</td></tr>").join("") + "</tbody></table>";
   });
-  h += '<div class="btn-row"><button class="btn btn-primary" id="prepCartBtn">Prep cart for approval</button></div></div>';
+  h += '<div class="btn-row"><button class="btn btn-primary" id="prepCartBtn">Prep cart for approval</button>' +
+    '<button class="btn btn-ghost" id="prepCartPantryBtn" title="Prep a cart with only what the pantry does not cover">Prep cart minus pantry</button></div></div>';
   out.innerHTML = h;
   $("prepCartBtn").addEventListener("click", () => {
     const cart = M.prepCart(M.groceryFromPlan(M.getPlan()), "Weekly shop");
     renderCarts();
     toast("Cart prepped: " + cart.items.length + " items — review and approve below");
+  });
+  $("prepCartPantryBtn").addEventListener("click", () => {
+    const needed = M.pantryCoverage(M.groceryFromPlan(M.getPlan()))
+      .filter(i => i.need > 0)
+      .map(i => ({ name: i.name, qty: i.need, unit: i.unit, aisle: i.aisle }));
+    const cart = M.prepCart(needed, "Weekly shop (minus pantry)");
+    renderCarts();
+    toast("Cart prepped: " + cart.items.length + " items after pantry — review and approve below");
   });
 }
 function renderCarts() {
@@ -213,6 +304,7 @@ function renderHealth() {
   $("chartsOut").innerHTML = ch;
 
   const nudges = H.nudges();
+  renderSleepDebt();
   $("nudgesOut").innerHTML = nudges.length ? nudges.map(x =>
     '<div class="list-item"><div class="grow"><div class="title">' + esc(x.title) + ' <span class="pill ' + (x.priority === 1 ? "bad" : x.priority === 2 ? "warn" : "") + '">' + (x.priority === 1 ? "priority" : x.priority === 2 ? "watch" : "idea") + "</span></div>" +
     '<div class="meta">' + esc(x.detail) + "</div></div>" +
@@ -476,6 +568,32 @@ document.addEventListener("DOMContentLoaded", () => {
     M.savePlan(M.generatePlan({ diet: prefs.diet, servings: prefs.servings, startOffset: Math.floor(Math.random() * 7) }));
     renderPlan();
     toast("Meal plan generated");
+  });
+
+  $("pantryAdd").addEventListener("click", () => {
+    try {
+      M.addPantryItem({ name: $("pantryName").value, qty: $("pantryQty").value, unit: $("pantryUnit").value, expires: $("pantryExp").value });
+      $("pantryName").value = ""; $("pantryQty").value = ""; $("pantryUnit").value = ""; $("pantryExp").value = "";
+      renderPantry(); renderPlan();
+      toast("Added to pantry");
+    } catch (e) { toast(e.message); }
+  });
+
+  $("budgetSave").addEventListener("click", () => {
+    try {
+      M.setGroceryBudget($("budgetIn").value);
+      renderBudget();
+      toast($("budgetIn").value === "" ? "Budget cleared" : "Budget set");
+    } catch (e) { toast(e.message); }
+  });
+
+  $("spendAdd").addEventListener("click", () => {
+    try {
+      M.logGrocerySpend($("spendAmt").value, $("spendDate").value || undefined, $("spendNote").value);
+      $("spendAmt").value = ""; $("spendDate").value = ""; $("spendNote").value = "";
+      renderBudget();
+      toast("Trip logged");
+    } catch (e) { toast(e.message); }
   });
 
   $("taskAdd").addEventListener("click", () => {
