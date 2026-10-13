@@ -6,13 +6,16 @@ const store = (typeof require !== "undefined") ? require("./store.js") : window.
 
 function uid(p) { return (p || "id") + "-" + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36); }
 
+const REPEAT = ["none", "daily", "weekly"];
+
 function addTask(t) {
   t = t || {};
   if (!(t.title || "").trim()) throw new Error("task needs a title");
+  const repeat = REPEAT.indexOf(t.repeat) === -1 ? "none" : t.repeat;
   const tasks = store.get("tasks", []);
   const task = { id: uid("task"), title: t.title.trim(), due: t.due || null,
                  priority: t.priority || "normal", notes: t.notes || "",
-                 done: false, createdAt: new Date().toISOString() };
+                 repeat, done: false, createdAt: new Date().toISOString() };
   tasks.push(task);
   store.set("tasks", tasks);
   return task;
@@ -28,12 +31,28 @@ function listTasks(filter) {
   const pw = { high: 0, normal: 1, low: 2 };
   return tasks.slice().sort((a, b) => (pw[a.priority] - pw[b.priority]) || (a.due || "9999").localeCompare(b.due || "9999"));
 }
+function shiftDue(due, repeat) {
+  if (!due || repeat === "none") return due;
+  const d = new Date(due + "T12:00:00");
+  d.setDate(d.getDate() + (repeat === "daily" ? 1 : 7));
+  return d.toISOString().slice(0, 10);
+}
+
+// Completing a recurring task spawns its next occurrence (due +1/+7 days).
+// The spawned task is attached as `spawned` on the returned task.
 function toggleTask(id) {
   const tasks = store.get("tasks", []);
   const t = tasks.find(x => x.id === id);
   if (!t) throw new Error("unknown task: " + id);
   t.done = !t.done;
   t.doneAt = t.done ? new Date().toISOString() : null;
+  if (t.done && t.repeat && t.repeat !== "none") {
+    const next = { id: uid("task"), title: t.title, due: shiftDue(t.due, t.repeat),
+                   priority: t.priority, notes: t.notes || "", repeat: t.repeat,
+                   done: false, createdAt: new Date().toISOString() };
+    tasks.push(next);
+    t.spawned = next;
+  }
   store.set("tasks", tasks);
   return t;
 }
@@ -120,7 +139,7 @@ function weekGrid(anchorDate) {
   return days;
 }
 
-const api = { addTask, listTasks, toggleTask, deleteTask, addEvent, listEvents,
+const api = { REPEAT, addTask, listTasks, toggleTask, deleteTask, addEvent, listEvents,
               deleteEvent, upcomingEvents, detectConflicts, meetingPrep, weekGrid };
 
 if (typeof window !== "undefined") window.HearthSchedule = api;

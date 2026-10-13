@@ -107,10 +107,34 @@
             <div class="btn-row"><button class="btn btn-ghost" id="ahImportBtn">Parse &amp; import</button></div>
             <div id="ahOut" class="meta" style="font-size:13px;color:var(--muted)"></div>
           </div>
+          <div class="card">
+            <h2>Workouts</h2>
+            <p class="lede">Log sessions manually. Weekly goal defaults to 150 min.</p>
+            <div class="form-row">
+              <div><select id="woType">
+                <option value="walk">Walk</option>
+                <option value="run">Run</option>
+                <option value="strength">Strength</option>
+                <option value="cycling">Cycling</option>
+                <option value="swim">Swim</option>
+                <option value="yoga">Yoga</option>
+                <option value="sport">Sport</option>
+                <option value="other">Other</option>
+              </select></div>
+              <div style="flex:1"><input type="number" id="woMin" min="1" max="1440" placeholder="Minutes"></div>
+              <div style="flex:0"><button class="btn btn-primary" id="woAdd">Log</button></div>
+            </div>
+            <div class="form-row">
+              <div style="flex:1"><input type="number" id="woGoal" min="30" max="1000" placeholder="Weekly goal (min)"></div>
+              <div style="flex:0"><button class="btn btn-ghost btn-sm" id="woGoalBtn">Set goal</button></div>
+            </div>
+            <div id="workoutsOut"></div>
+          </div>
         </div>
         <div class="card">
           <h2>Trends <span class="pill" id="healthN"></span></h2>
           <p class="lede">Last 14 days. Hand-rolled charts — no external libraries.</p>
+          <div id="insightOut"></div>
           <div id="sleepDebtOut"></div>
           <div id="chartsOut"></div>
         </div>
@@ -128,6 +152,11 @@
             <div class="form-row">
               <div style="flex:2"><input type="text" id="taskTitle" placeholder="New task"></div>
               <div><input type="date" id="taskDue"></div>
+              <div><select id="taskRepeat" title="Repeat">
+                <option value="none">Once</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+              </select></div>
               <div style="flex:0"><button class="btn btn-primary" id="taskAdd">Add</button></div>
             </div>
             <div id="tasksOut"></div>

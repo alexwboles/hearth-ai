@@ -37,7 +37,8 @@ function parseIntent(text) {
   if (has("briefing", "morning briefing", "my day", "what's today", "whats today", "today's plan"))
     return { intent: "briefing" };
   if (has("add task", "new task", "remind me to", "todo", "to-do", "to do"))
-    return { intent: "add_task", title: extractAfter(t, ["add task", "new task", "remind me to"]) };
+    return { intent: "add_task", title: extractAfter(t, ["add task", "new task", "remind me to"]),
+             repeat: has("every day", "daily") ? "daily" : has("every week", "weekly") ? "weekly" : "none" };
   if (has("schedule", "meeting", "calendar", "appointment", "add event"))
     return { intent: "schedule" };
   if (has("draft email", "write email", "email reply", "reply to"))
@@ -56,7 +57,21 @@ function parseIntent(text) {
     return { intent: "greet" };
   if (has("thank"))
     return { intent: "thanks" };
+  if (has("workout", "exercise", "went for a run", "gym session", "yoga session"))
+    return { intent: "log_workout", minutes: firstNumber(t), type: workoutType(t) };
   return { intent: "unknown" };
+}
+
+function workoutType(t) {
+  const hit = (...words) => words.some(w => t.indexOf(w) !== -1);
+  if (hit("run", "ran", "jog")) return "run";
+  if (hit("walk", "hike")) return "walk";
+  if (hit("strength", "lift", "weight", "gym")) return "strength";
+  if (hit("cycl", "bike", "ride")) return "cycling";
+  if (hit("swim", "swam", "pool")) return "swim";
+  if (hit("yoga", "stretch")) return "yoga";
+  if (hit("tennis", "soccer", "basketball", "sport", "game")) return "sport";
+  return "other";
 }
 
 function firstNumber(t) {
@@ -84,7 +99,7 @@ function respond(text) {
     case "thanks":
       return R("Anytime. I'm here whenever you need a plan, a draft, or a nudge.");
     case "help":
-      return R("I can: plan your week's meals and build the grocery list; log health and spot trends; manage tasks and your calendar; draft emails and call scripts (you approve everything — I never send); keep simple spreadsheets; write research briefs; and give you a morning briefing with predictive nudges. Try \"plan my meals this week\" or \"log 7 hours of sleep\".");
+      return R("I can: plan your week's meals and build the grocery list; log health (sleep, workouts, mood) and spot trends; manage tasks and your calendar — tasks can repeat daily or weekly; draft emails and call scripts (you approve everything — I never send); keep simple spreadsheets; write research briefs; and give you a morning briefing with predictive nudges. Try \"plan my meals this week\" or \"log workout 30 minutes run\".");
     case "plan_meals": {
       const prefs = meals.getPrefs();
       const plan = meals.generatePlan({ diet: prefs.diet, servings: prefs.servings, startOffset: Math.floor(Math.random() * 7) });
@@ -137,8 +152,16 @@ function respond(text) {
     }
     case "add_task": {
       if (!parsed.title) return R("What should I add? Say \"add task: buy milk\" or \"remind me to call the dentist\".");
-      const t = schedule.addTask({ title: parsed.title });
-      return R("Added to your tasks: \"" + t.title + "\".", [], "schedule");
+      const t = schedule.addTask({ title: parsed.title, repeat: parsed.repeat || "none" });
+      return R("Added to your tasks: \"" + t.title + "\"" + (t.repeat !== "none" ? " (repeats " + t.repeat + ")" : "") + ".", [], "schedule");
+    }
+    case "log_workout": {
+      if (parsed.minutes == null) return R("How long? Say it like \"log workout 30 minutes run\".");
+      try {
+        const w = health.logWorkout(parsed.type, parsed.minutes);
+        const wk = health.workoutWeek();
+        return R("Logged: " + w.minutes + " min " + w.type + " today. That's " + wk.minutes + "/" + wk.goal + " min this week.", [], "health");
+      } catch (e) { return R("Couldn't log that: " + e.message); }
     }
     case "schedule":
       return R("I can add events, spot overlaps, and write meeting prep notes. Open Schedule to manage the calendar, or tell me \"add event: dentist tomorrow 2pm\" — I'll do my best with the date you give me.", [], "schedule");

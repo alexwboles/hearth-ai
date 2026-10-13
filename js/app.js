@@ -203,6 +203,33 @@ function renderSleepDebt() {
       : 'No sleep debt — averaging ' + d.avg + 'h against an 8h target. Keep it up.') + "</p>" +
     rows + "</div>";
 }
+
+// Cross-metric insight: does sleep line up with mood?
+function renderInsight() {
+  const link = H.sleepMoodLink(30);
+  $("insightOut").innerHTML = link
+    ? '<div class="insight"><strong>Sleep × mood.</strong> ' + esc(link.copy) + "</div>"
+    : "";
+}
+
+// Workouts: weekly progress vs goal + recent sessions.
+function renderWorkouts() {
+  const wk = H.workoutWeek();
+  $("woGoal").placeholder = "Weekly goal (min) — now " + wk.goal;
+  const recent = H.listWorkouts(30);
+  $("workoutsOut").innerHTML =
+    '<div class="workout-progress"><div class="workout-bar"><i style="width:' + wk.pct + '%"></i></div>' +
+    '<div class="workout-meta">' + wk.minutes + " / " + wk.goal + " min this week · " + wk.sessions +
+    (wk.sessions === 1 ? " session" : " sessions") + (wk.met ? ' · <strong class="good">goal met</strong>' : "") + "</div></div>" +
+    (recent.length ? '<div class="workout-list">' + recent.slice(0, 10).map(w =>
+      '<div class="list-item slim"><div class="grow"><div class="title">' + esc(w.type) + ' — ' + w.minutes + ' min</div>' +
+      '<div class="meta">' + esc(w.date) + '</div></div>' +
+      '<button class="btn btn-danger-ghost btn-sm" data-delworkout="' + w.id + '">Delete</button></div>').join("") + "</div>"
+      : '<div class="empty">No workouts in the last 30 days.</div>');
+  $("workoutsOut").querySelectorAll("[data-delworkout]").forEach(b => b.addEventListener("click", () => {
+    H.deleteWorkout(b.dataset.delworkout); renderWorkouts(); renderHealth();
+  }));
+}
 function renderPlan() {
   const out = $("planOut");
   const plan = M.getPlan();
@@ -305,6 +332,8 @@ function renderHealth() {
 
   const nudges = H.nudges();
   renderSleepDebt();
+  renderInsight();
+  renderWorkouts();
   $("nudgesOut").innerHTML = nudges.length ? nudges.map(x =>
     '<div class="list-item"><div class="grow"><div class="title">' + esc(x.title) + ' <span class="pill ' + (x.priority === 1 ? "bad" : x.priority === 2 ? "warn" : "") + '">' + (x.priority === 1 ? "priority" : x.priority === 2 ? "watch" : "idea") + "</span></div>" +
     '<div class="meta">' + esc(x.detail) + "</div></div>" +
@@ -336,11 +365,16 @@ function renderTasks() {
   const tasks = Sch.listTasks("open").concat(Sch.listTasks("done"));
   $("tasksOut").innerHTML = tasks.length ? tasks.map(t =>
     '<div class="list-item"><input type="checkbox" class="done-check" data-task="' + t.id + '"' + (t.done ? " checked" : "") + ">" +
-    '<div class="grow"><div class="title ' + (t.done ? "strike" : "") + '">' + esc(t.title) + "</div>" +
+    '<div class="grow"><div class="title ' + (t.done ? "strike" : "") + '">' + esc(t.title) +
+    (t.repeat && t.repeat !== "none" ? ' <span class="pill">' + esc(t.repeat) + "</span>" : "") + "</div>" +
     '<div class="meta">' + (t.due ? esc(t.due) + " · " : "") + esc(t.priority) + (t.notes ? " · " + esc(t.notes) : "") + "</div></div>" +
     '<button class="btn btn-danger-ghost btn-sm" data-deltask="' + t.id + '">Delete</button></div>').join("")
     : '<div class="empty">No tasks. Add one above or say "add task buy milk" in chat.</div>';
-  $("tasksOut").querySelectorAll("[data-task]").forEach(cb => cb.addEventListener("change", () => { Sch.toggleTask(cb.dataset.task); renderTasks(); }));
+  $("tasksOut").querySelectorAll("[data-task]").forEach(cb => cb.addEventListener("change", () => {
+    const done = Sch.toggleTask(cb.dataset.task);
+    if (done.spawned) toast("Done — next " + done.spawned.repeat + " one queued" + (done.spawned.due ? " for " + done.spawned.due : ""));
+    renderTasks();
+  }));
   $("tasksOut").querySelectorAll("[data-deltask]").forEach(b => b.addEventListener("click", () => { Sch.deleteTask(b.dataset.deltask); renderTasks(); }));
 }
 function renderEvents() {
@@ -599,10 +633,29 @@ document.addEventListener("DOMContentLoaded", () => {
   $("taskAdd").addEventListener("click", () => {
     const title = $("taskTitle").value.trim();
     if (!title) { toast("Give the task a title"); return; }
-    Sch.addTask({ title, due: $("taskDue").value || null });
-    $("taskTitle").value = ""; $("taskDue").value = "";
+    Sch.addTask({ title, due: $("taskDue").value || null, repeat: $("taskRepeat").value });
+    $("taskTitle").value = ""; $("taskDue").value = ""; $("taskRepeat").value = "none";
     renderTasks(); toast("Task added");
   });
+  $("woAdd").addEventListener("click", () => {
+    const mins = parseFloat($("woMin").value);
+    if (!isFinite(mins)) { toast("Enter minutes first"); return; }
+    try {
+      H.logWorkout($("woType").value, mins);
+      $("woMin").value = "";
+      renderHealth(); toast("Workout logged");
+    } catch (e) { toast(e.message); }
+  });
+  $("woGoalBtn").addEventListener("click", () => {
+    const g = parseFloat($("woGoal").value);
+    if (!isFinite(g)) { toast("Enter a goal first"); return; }
+    try {
+      H.setWorkoutGoal(g);
+      $("woGoal").value = "";
+      renderHealth(); toast("Workout goal updated");
+    } catch (e) { toast(e.message); }
+  });
+
   $("evAdd").addEventListener("click", () => {
     try {
       Sch.addEvent({ title: $("evTitle").value, date: $("evDate").value, start: $("evStart").value || null, end: $("evEnd").value || null, attendees: $("evAtt").value });

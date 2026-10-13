@@ -252,5 +252,67 @@ ok("sleep debt rolling window", () => {
   assert.strictEqual(d2.debt, d.debt, "deterministic");
 });
 
+// 13. Sleep × mood insight finds the pattern (or stays honest when data is thin).
+ok("sleep-mood correlation insight", () => {
+  store.createProfile("H");
+  const at = (off) => new Date(new Date(Date.now() - off * 864e5).toISOString().slice(0, 10) + "T12:00:00");
+  // 5 rested nights (mood 4-5) + 4 short nights (mood 2-3)
+  for (let i = 1; i <= 5; i++) {
+    health.logEntry("sleep", 7.5 + i * 0.1, at(i));
+    health.logEntry("mood", 4 + (i % 2), at(i));
+  }
+  for (let i = 6; i <= 9; i++) {
+    health.logEntry("sleep", 5 + i * 0.1, at(i));
+    health.logEntry("mood", 2 + (i % 2), at(i));
+  }
+  const link = health.sleepMoodLink(30);
+  assert.ok(link, "should find the pattern");
+  assert.ok(link.gap >= 1, "rested mood clearly higher, gap=" + link.gap);
+  assert.strictEqual(link.pairs, 9);
+  assert.ok(link.copy.length > 40, "human-readable copy");
+});
+
+// 14. Workout log with a weekly goal.
+ok("workout log + weekly goal", () => {
+  store.createProfile("H");
+  const now = new Date();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  const day = (off) => new Date(monday.getTime() + off * 864e5).toISOString().slice(0, 10);
+  health.logWorkout("run", 30, new Date(day(0) + "T12:00:00"));
+  health.logWorkout("strength", 45, new Date(day(1) + "T12:00:00"));
+  const wk = health.workoutWeek(day(0));
+  assert.strictEqual(wk.minutes, 75);
+  assert.strictEqual(wk.sessions, 2);
+  assert.strictEqual(wk.met, false, "75 < 150 default goal");
+  health.setWorkoutGoal(60);
+  assert.strictEqual(health.workoutWeek(day(0)).met, true, "75 >= 60 goal");
+  const n = health.nudges();
+  assert.ok(!n.some(x => x.id === "no-workout"), "no quiet-week nudge when workouts exist");
+  health.deleteWorkout(health.listWorkouts()[0].id);
+  health.deleteWorkout(health.listWorkouts()[0].id);
+  assert.ok(health.nudges().some(x => x.id === "no-workout"), "quiet-week nudge fires at zero");
+});
+
+// 15. Recurring tasks respawn; chat understands repeats and workouts.
+ok("recurring tasks + chat workout/repeat intents", () => {
+  store.createProfile("H");
+  const day = (off) => new Date(Date.now() - off * 864e5).toISOString().slice(0, 10);
+  const daily = schedule.addTask({ title: "Take vitamins", due: day(0), repeat: "daily" });
+  const done = schedule.toggleTask(daily.id);
+  assert.ok(done.spawned, "daily task respawns on completion");
+  assert.strictEqual(done.spawned.due, day(-1));
+  assert.strictEqual(schedule.listTasks("open").filter(t => t.title === "Take vitamins").length, 1);
+  assert.strictEqual(chat.parseIntent("add task water the plants every week").repeat, "weekly");
+  assert.strictEqual(chat.parseIntent("add task buy milk").repeat, "none");
+  const p = chat.parseIntent("log workout 30 minutes run");
+  assert.strictEqual(p.intent, "log_workout");
+  assert.strictEqual(p.minutes, 30);
+  assert.strictEqual(p.type, "run");
+  const r = chat.respond("log workout 45 minutes strength");
+  assert.ok(r.reply.indexOf("45 min strength") !== -1, "chat logs the workout: " + r.reply);
+  assert.strictEqual(health.workoutWeek().minutes, 45);
+});
+
 console.log("\\nAll " + n + " e2e flows passed.");
 

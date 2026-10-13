@@ -248,3 +248,18 @@ table.data tr:last-child td { border-bottom: 0; }
 .debt-bar i.bad { background: #d9a441; }
 .debt-bar i.dim { background: #cfc9b8; }
 .debt-val { width: 92px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* cross-metric insight */
+.insight {
+  background: #f2f7f2; border: 1px solid #cfe3d1; border-left: 4px solid var(--good);
+  border-radius: 0; padding: 12px 16px; margin-bottom: 18px; font-size: 14.5px; line-height: 1.6;
+}
+
+/* workouts */
+.workout-progress { margin-bottom: 14px; }
+.workout-bar { height: 14px; background: #eee9da; border-radius: 0; overflow: hidden; }
+.workout-bar i { display: block; height: 100%; background: var(--accent); }
+.workout-meta { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.workout-meta .good { color: var(--good); }
+.workout-list { margin-top: 6px; }
+.list-item.slim { padding: 8px 12px; }

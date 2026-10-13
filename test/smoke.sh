@@ -226,5 +226,68 @@ for id in pantryName pantryQty pantryUnit pantryExp pantryAdd pantryOut pantryWa
 done
 pass "pantry/budget/sleep-debt UI wired"
 
+# 18: UI wiring — workouts, recurring tasks, sleep-mood insight
+for id in woType woMin woAdd woGoal woGoalBtn workoutsOut insightOut taskRepeat; do
+  grep -q "id=\"$id\"" index.html || grep -q "\"$id\"" js/app.js || fail "missing UI id: $id"
+done
+pass "workout log / recurring tasks / insight UI wired"
+
+# 19: sleep-mood link, workout log, recurring tasks
+node -e "
+const store = require('./js/store.js'); store.resetForTests(); store.createProfile('H');
+const health = require('./js/health.js');
+const schedule = require('./js/schedule.js');
+const day = (off) => { const d = new Date(Date.now() - off * 864e5); return d.toISOString().slice(0, 10); };
+const at = (off) => new Date(day(off) + 'T12:00:00');
+// sleep-mood: 2 rested + 2 short paired nights
+health.logEntry('sleep', 8, at(4)); health.logEntry('mood', 5, at(4));
+health.logEntry('sleep', 7.5, at(3)); health.logEntry('mood', 4, at(3));
+health.logEntry('sleep', 5, at(2)); health.logEntry('mood', 2, at(2));
+health.logEntry('sleep', 5.5, at(1)); health.logEntry('mood', 3, at(1));
+const link = health.sleepMoodLink(30);
+if (!link) throw new Error('link should exist');
+if (link.restedMood !== 4.5) throw new Error('rested mood: ' + link.restedMood);
+if (link.shortMood !== 2.5) throw new Error('short mood: ' + link.shortMood);
+if (link.gap !== 2) throw new Error('gap: ' + link.gap);
+if (link.pairs !== 4) throw new Error('pairs: ' + link.pairs);
+if (!/sleep/.test(link.copy)) throw new Error('no human copy');
+if (health.sleepMoodLink(1) !== null) throw new Error('1-day window must be null');
+// workouts (Monday-anchored so the week total holds on any weekday)
+const _now = new Date();
+const _mon = new Date(_now);
+_mon.setDate(_now.getDate() - ((_now.getDay() + 6) % 7));
+const _mday = (off) => new Date(_mon.getTime() + off * 864e5).toISOString().slice(0, 10);
+const w = health.logWorkout('run', 30, new Date(_mday(0) + 'T12:00:00'));
+if (w.type !== 'run' || w.minutes !== 30) throw new Error('workout shape');
+health.logWorkout('yoga', 20, new Date(_mday(1) + 'T12:00:00'));
+const wk = health.workoutWeek(_mday(0));
+if (wk.minutes !== 50 || wk.sessions !== 2) throw new Error('week minutes: ' + JSON.stringify(wk));
+if (health.workoutGoal() !== 150) throw new Error('default goal should be 150');
+health.setWorkoutGoal(60);
+if (health.workoutGoal() !== 60) throw new Error('goal not set');
+let threw = false; try { health.logWorkout('run', 0); } catch (e) { threw = true; }
+if (!threw) throw new Error('zero minutes accepted');
+threw = false; try { health.setWorkoutGoal(5); } catch (e) { threw = true; }
+if (!threw) throw new Error('tiny goal accepted');
+health.deleteWorkout(w.id);
+if (health.listWorkouts().length !== 1) throw new Error('delete failed');
+// recurring tasks
+const t = schedule.addTask({ title: 'Water plants', due: day(0), repeat: 'daily' });
+if (t.repeat !== 'daily') throw new Error('repeat not stored');
+const done = schedule.toggleTask(t.id);
+if (!done.spawned) throw new Error('no next occurrence spawned');
+if (done.spawned.due !== day(-1)) throw new Error('next due should be tomorrow, got ' + done.spawned.due);
+if (done.spawned.repeat !== 'daily' || done.spawned.done) throw new Error('spawn shape wrong');
+const tw = schedule.addTask({ title: 'Pay rent', due: day(0), repeat: 'weekly' });
+const doneW = schedule.toggleTask(tw.id);
+if (doneW.spawned.due !== day(-7)) throw new Error('weekly next due: ' + doneW.spawned.due);
+const once = schedule.addTask({ title: 'One-off' });
+if (schedule.toggleTask(once.id).spawned) throw new Error('one-off should not spawn');
+const bad = schedule.addTask({ title: 'X', repeat: 'bogus' });
+if (bad.repeat !== 'none') throw new Error('bad repeat not normalized to none');
+console.log('OK');
+" || fail "workout / sleep-mood / recurring logic"
+pass "sleep-mood insight, workout log with weekly goal, recurring tasks"
+
 echo ""
-echo "All 17 smoke checks passed."
+echo "All 19 smoke checks passed."

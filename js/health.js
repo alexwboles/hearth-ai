@@ -153,6 +153,9 @@ function nudges(ctx) {
   if (!sleep.length && !steps.length && !water.length)
     out.push({ id: "no-data", priority: 3, title: "Start your health picture",
       detail: "No health logs yet. Log tonight's sleep or import your Apple Health export to unlock trends and predictions." });
+  if (workoutWeek().minutes === 0)
+    out.push({ id: "no-workout", priority: 3, title: "Quiet week, movement-wise",
+      detail: "No workouts logged this week (goal " + workoutGoal() + " min). Even a 20-minute walk counts — log it in Health." });
 
   // Staple prediction: items whose avg consumption window is nearly up.
   const bought = store.get("stapleBought", {});
@@ -201,9 +204,98 @@ function sleepDebt(days, target, today) {
   };
 }
 
+// Sleep × mood: does more sleep line up with better mood?
+// Compares average mood on well-rested nights (7h+) vs short nights (<6h)
+// over the last `days` where both were logged. Needs >=4 such pairs and at
+// least one night in each bucket to say anything honest.
+function sleepMoodLink(days) {
+  days = days || 30;
+  const byDay = {};
+  getLogs("sleep").forEach(l => { (byDay[l.date] = byDay[l.date] || {}).sleep = l.value; });
+  getLogs("mood").forEach(l => { (byDay[l.date] = byDay[l.date] || {}).mood = l.value; });
+  const cutoff = dayKey(new Date(Date.now() - (days - 1) * 864e5));
+  const rested = [], short = [];
+  Object.keys(byDay).forEach(d => {
+    if (d < cutoff) return;
+    const p = byDay[d];
+    if (p.sleep == null || p.mood == null) return;
+    if (p.sleep >= 7) rested.push(p.mood);
+    else if (p.sleep < 6) short.push(p.mood);
+  });
+  if (rested.length + short.length < 4 || !rested.length || !short.length) return null;
+  const restedMood = avg(rested), shortMood = avg(short);
+  const gap = Math.round((restedMood - shortMood) * 10) / 10;
+  return {
+    days, pairs: rested.length + short.length,
+    restedNights: rested.length, restedMood,
+    shortNights: short.length, shortMood, gap,
+    copy: gap >= 0.8
+      ? "On nights you slept 7h+ your mood averaged " + restedMood + "/5, vs " + shortMood + "/5 after short nights (" +
+        rested.length + " vs " + short.length + " nights). Protecting sleep looks like your strongest mood lever."
+      : "No strong sleep–mood pattern in the last " + days + " days (rested " + restedMood + "/5 vs short " + shortMood +
+        "/5). Keep logging — the pattern needs more paired days."
+  };
+}
+
+// ---- workout log ----
+const WORKOUT_TYPES = ["walk", "run", "strength", "cycling", "swim", "yoga", "sport", "other"];
+
+function logWorkout(type, minutes, date) {
+  type = String(type || "other").toLowerCase();
+  if (WORKOUT_TYPES.indexOf(type) === -1) type = "other";
+  minutes = Number(minutes);
+  if (!isFinite(minutes) || minutes <= 0 || minutes > 1440) throw new Error("workout minutes must be 1-1440");
+  const key = dayKey(date ? new Date(date) : new Date());
+  const logs = store.get("workoutLogs", []);
+  const w = { id: "w" + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
+              type, minutes: Math.round(minutes), date: key, at: new Date().toISOString() };
+  logs.push(w);
+  store.set("workoutLogs", logs);
+  return w;
+}
+
+function listWorkouts(days) {
+  let logs = store.get("workoutLogs", []);
+  if (days) {
+    const cutoff = dayKey(new Date(Date.now() - (days - 1) * 864e5));
+    logs = logs.filter(w => w.date >= cutoff);
+  }
+  return logs.slice().sort((a, b) => (b.date + b.at).localeCompare(a.date + a.at));
+}
+
+function deleteWorkout(id) {
+  store.set("workoutLogs", store.get("workoutLogs", []).filter(w => w.id !== id));
+}
+
+function workoutGoal() { return store.get("workoutGoalMin", 150); }
+
+function setWorkoutGoal(minutes) {
+  minutes = Number(minutes);
+  if (!isFinite(minutes) || minutes < 30 || minutes > 1000)
+    throw new Error("weekly workout goal must be 30-1000 minutes");
+  store.set("workoutGoalMin", Math.round(minutes));
+  return workoutGoal();
+}
+
+// This week's minutes (Monday-start week) vs goal.
+function workoutWeek(todayStr) {
+  const today = todayStr ? new Date(todayStr + "T12:00:00") : new Date();
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+  const start = dayKey(monday);
+  const end = dayKey(new Date(monday.getTime() + 6 * 864e5));
+  const logs = store.get("workoutLogs", []).filter(w => w.date >= start && w.date <= end);
+  const minutes = logs.reduce((a, w) => a + w.minutes, 0);
+  const goal = workoutGoal();
+  return { minutes, goal, sessions: logs.length, met: minutes >= goal,
+           pct: goal ? Math.min(100, Math.round(minutes / goal * 100)) : 0 };
+}
+
 const api = { dayKey, logEntry, getLogs, weeklyAverages, trendSeries,
               parseAppleHealthXML, importAppleHealth, nudges, markStapleBought,
-              sleepDebt };
+              sleepDebt, sleepMoodLink,
+              WORKOUT_TYPES, logWorkout, listWorkouts, deleteWorkout,
+              workoutGoal, setWorkoutGoal, workoutWeek };
 
 if (typeof window !== "undefined") window.HearthHealth = api;
 if (typeof module !== "undefined" && module.exports) module.exports = api;
