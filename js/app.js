@@ -20,6 +20,17 @@ function toast(msg) {
 }
 
 // ---------- Navigation ----------
+// Inline SVG icons for the sidebar nav (16px, stroke-based).
+const ICONS = {
+  chat: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 3h12v8H8l-4 3v-3H2z" stroke-linejoin="round"/></svg>',
+  meals: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2.5"/></svg>',
+  health: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 9h3l2-4 2 7 2-3h3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  schedule: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="11"/><path d="M2 6h12M5.5 1.5v3M10.5 1.5v3" stroke-linecap="round"/></svg>',
+  comms: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="12" height="9"/><path d="M2.5 5l5.5 4 5.5-4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  sheets: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12"/><path d="M2 6h12M6 2v12" /></svg>',
+  research: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14" stroke-linecap="round"/></svg>',
+  briefing: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 13h10M4 13V6l4-3 4 3v7" stroke-linejoin="round"/><path d="M8 1.5v1.5" stroke-linecap="round"/></svg>'
+};
 const VIEWS = [
   ["chat", "Chat", "Talk to Hearth"],
   ["meals", "Meals & Groceries", "Plan meals, build the list, prep the cart"],
@@ -32,7 +43,7 @@ const VIEWS = [
 ];
 function buildNav() {
   $("nav").innerHTML = VIEWS.map(v =>
-    '<button class="nav-btn' + (v[0] === "chat" ? " active" : "") + '" data-view="' + v[0] + '"><span class="dot"></span>' + esc(v[1]) + "</button>").join("");
+    '<button class="nav-btn' + (v[0] === "chat" ? " active" : "") + '" data-view="' + v[0] + '"><span class="nav-ico">' + (ICONS[v[0]] || "") + "</span>" + esc(v[1]) + "</button>").join("");
   $("nav").querySelectorAll(".nav-btn").forEach(b => b.addEventListener("click", () => showView(b.dataset.view)));
 }
 function showView(id) {

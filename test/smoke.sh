@@ -291,3 +291,24 @@ pass "sleep-mood insight, workout log with weekly goal, recurring tasks"
 
 echo ""
 echo "All 19 smoke checks passed."
+
+# redesign sweep: icon nav, dark sidebar, sharp geometry
+node -e "
+const fs = require('fs'), a = fs.readFileSync('js/app.js', 'utf8');
+if (!/const ICONS = \{[\s\S]*chat:/.test(a)) throw new Error('no ICONS map');
+for (const v of ['chat','meals','health','schedule','comms','sheets','research','briefing'])
+  if (!a.includes(v + ':')) throw new Error('missing icon ' + v);
+if (!a.includes('nav-ico')) throw new Error('no nav-ico class');
+console.log('OK');" || fail "sidebar icon nav in app.js"
+pass "sidebar icon nav in app.js"
+
+node -e "
+const fs = require('fs'), c = fs.readFileSync('css/style.css', 'utf8');
+const radii = c.match(/border-(?:top-|bottom-)?(?:left-|right-)?radius:\s*([^;]+);/g) || [];
+const bad = radii.filter(r => !/:\s*0;/.test(r));
+if (bad.length) throw new Error('rounded remnants: ' + bad.slice(0, 3).join(', '));
+if (!c.includes('background: #211a13')) throw new Error('no dark sidebar');
+if (!c.includes('.nav-btn .nav-ico')) throw new Error('no nav-ico css');
+if (!c.includes('border-left: 3px solid var(--accent)')) throw new Error('no chat accent bar');
+console.log('OK');" || fail "sharp geometry + dark sidebar css"
+pass "sharp geometry + dark sidebar css"
