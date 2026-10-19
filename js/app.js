@@ -87,7 +87,7 @@ function renderChat() {
   if (!hist.length) addBotMsg("Hello " + esc(S.activeProfile().name) + ". I'm Hearth — I plan, draft and predict across your meals, health, schedule and more. Everything I make is a proposal for you to approve. What shall we sort out first?", [
     { label: "Morning briefing", run: "briefing" }, { label: "Plan my meals", run: "plan_meals" }, { label: "What can you do?", run: "help" }
   ]);
-  hist.forEach(h => { addUserMsg(h.user, true); addBotMsg(h.assistant, [], true); });
+  hist.forEach(h => { addUserMsg(h.user, true); addBotMsg(esc(h.assistant), [], true); });
   log.scrollTop = log.scrollHeight;
 }
 function addUserMsg(text, skip) {
