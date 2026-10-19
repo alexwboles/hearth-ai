@@ -28,8 +28,8 @@ python3 -m http.server 8080   # then open http://localhost:8080
 ## Tests
 
 ```bash
-test/smoke.sh   # 22 fast checks: files, syntax, logic spot-checks, design + privacy greps
-test/e2e.sh     # 16 realistic flows through the logic layer (node)
+test/smoke.sh   # 25 fast checks: files, syntax, logic spot-checks, design + privacy greps
+test/e2e.sh     # 17 realistic flows through the logic layer (node)
 ```
 
 ## Roadmap (hosted upgrades)

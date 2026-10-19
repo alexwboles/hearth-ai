@@ -355,5 +355,45 @@ ok("medications: dose check-off, refill math, briefing + chat", () => {
   assert.strictEqual(a, 88, "7/8 scheduled doses taken, got " + a);
 });
 
+// 17. v2: daily pulse rings, trend arrows, chart period granularity.
+ok("daily pulse, trend arrows, chart periods", () => {
+  store.createProfile("H");
+  const d = (off) => new Date(Date.now() - off * 864e5);
+  // Pulse: today's value vs goal.
+  health.logEntry("steps", 4000);
+  const pulse = health.dailyPulse();
+  const steps = pulse.find(p => p.id === "steps");
+  assert.strictEqual(steps.value, 4000, "today's steps on the pulse");
+  assert.strictEqual(steps.pct, 50, "4000/8000 = 50%");
+  assert.strictEqual(steps.logged, true);
+  assert.strictEqual(pulse.find(p => p.id === "sleep").logged, false, "sleep not logged yet");
+  assert.strictEqual(pulse.find(p => p.id === "weight"), undefined, "weight has no daily goal, not a ring");
+  // Trend arrow: rising steps over two weeks -> up.
+  for (let i = 13; i >= 7; i--) health.logEntry("steps", 3000, d(i));
+  for (let i = 6; i >= 0; i--) health.logEntry("steps", 9000, d(i));
+  const arrow = health.trendArrow("steps", 7);
+  assert.strictEqual(arrow.dir, "up", "rising steps");
+  assert.strictEqual(arrow.better, true);
+  assert.ok(arrow.gap > 0);
+  // No honest arrow without enough data.
+  assert.strictEqual(health.trendArrow("water", 7), null, "no water data -> null");
+  health.logEntry("water", 6, d(0));
+  assert.strictEqual(health.trendArrow("water", 7), null, "one day is not enough -> null");
+  // Chart period granularity.
+  assert.strictEqual(health.trendSeries("steps", 7).length, 7);
+  assert.strictEqual(health.trendSeries("steps", 30).length, 30);
+  // Briefing determinism: the injected `now` drives med status, not wall clock.
+  const m = meds.addMed({ name: "EveningMed", dose: "1", times: ["20:00"],
+                          pillsRemaining: 10, refillThreshold: 2, today: health.dayKey(new Date()) });
+  const briefEarly = proactive.morningBriefing(new Date(health.dayKey(new Date()) + "T08:30:00"));
+  const medSec = briefEarly.sections.find(s => s.title === "Medications");
+  assert.ok(!medSec || !medSec.lines.some(l => l.indexOf("EveningMed") !== -1 && l.indexOf("Missed") !== -1),
+    "08:30 briefing does not flag the 20:00 dose");
+  const briefLate = proactive.morningBriefing(new Date(health.dayKey(new Date()) + "T21:00:00"));
+  const medSec2 = briefLate.sections.find(s => s.title === "Medications");
+  assert.ok(medSec2 && medSec2.lines.some(l => l.indexOf("EveningMed") !== -1 && l.indexOf("20:00") !== -1),
+    "21:00 briefing flags the missed 20:00 dose");
+});
+
 console.log("\\nAll " + n + " e2e flows passed.");
 

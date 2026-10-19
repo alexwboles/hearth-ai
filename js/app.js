@@ -317,8 +317,77 @@ function renderCarts() {
 
 // ---------- Health ----------
 const LOG_TYPES = ["sleep", "steps", "water", "mood", "weight"];
+let chartDays = 14;
+
+const PULSE_COLORS = { sleep: "#5b8c5a", steps: "#c2410c", water: "#2f7f8f", mood: "#b45309" };
+
+function goalRing(p) {
+  const r = 44, c = 2 * Math.PI * r;
+  const filled = (c * Math.min(100, p.pct) / 100).toFixed(1);
+  const color = PULSE_COLORS[p.id] || "#c2410c";
+  return '<svg class="ring" viewBox="0 0 104 104" width="104" height="104" role="img" aria-label="' +
+    esc(p.name) + " " + p.pct + '% of goal">' +
+    '<circle cx="52" cy="52" r="44" fill="none" stroke="#ece5d6" stroke-width="10"/>' +
+    '<circle cx="52" cy="52" r="44" fill="none" stroke="' + color + '" stroke-width="10"' +
+    ' stroke-dasharray="' + filled + " " + c.toFixed(1) + '" transform="rotate(-90 52 52)"/>' +
+    '<text x="52" y="59" text-anchor="middle" class="ring-num">' + p.pct + "%</text></svg>";
+}
+function pulseVal(p) {
+  if (!p.logged) return '<span class="unlogged">not logged yet</span>';
+  if (p.id === "mood") return p.value + "/5 · goal " + p.goal;
+  if (p.id === "steps") return Number(p.value).toLocaleString("en-US") + " / " + Number(p.goal).toLocaleString("en-US");
+  return p.value + " / " + p.goal + " " + esc(p.unit);
+}
+function renderPulse() {
+  const pulse = H.dailyPulse();
+  $("pulseOut").innerHTML = pulse.map(p =>
+    '<div class="pulse-ring"><button class="ring-link" data-pulse-log="' + p.id + '" title="Log ' + esc(p.name.toLowerCase()) + '">' +
+    goalRing(p) + "</button>" +
+    '<div class="ring-cap">' + esc(p.name) + "</div>" +
+    '<div class="ring-val">' + pulseVal(p) + "</div></div>"
+  ).join("");
+  $("pulseOut").querySelectorAll("[data-pulse-log]").forEach(b => b.addEventListener("click", () => {
+    const inp = $("log-" + b.dataset.pulseLog);
+    if (inp) { inp.focus(); inp.scrollIntoView({ block: "center", behavior: "smooth" }); }
+  }));
+}
+
+// Apple-Health-Highlights-style directional arrow: last 7 days vs the 7 before.
+function trendGlyph(id) {
+  const a = H.trendArrow(id, 7);
+  if (!a) return "";
+  const sym = a.dir === "up" ? "▲" : a.dir === "down" ? "▼" : "▬";
+  const cls = a.better == null ? "neutral"
+    : a.dir === "flat" ? "flat"
+    : a.better ? a.dir : (a.dir === "up" ? "down" : "up");
+  const title = "Last 7 days avg " + a.current + " vs prior 7 avg " + a.prev;
+  return '<span class="trend ' + cls + '" title="' + esc(title) + '">' + sym + " " + (a.gap > 0 ? "+" : "") + a.gap + "</span>";
+}
+function renderCharts() {
+  const t = id => (D.HEALTH_TYPES.find(x => x.id === id) || {});
+  let ch = "";
+  ["sleep", "steps", "water", "mood", "weight"].forEach(id => {
+    const meta = t(id), series = H.trendSeries(id, chartDays);
+    const vals = series.map(p => p.value).filter(v => v != null);
+    ch += '<h3>' + esc(meta.name) + ' <span class="pill">' + (vals.length ? "avg " + (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1) + " " + esc(meta.unit) : "no data") + "</span>" + trendGlyph(id) + "</h3>";
+    ch += barChart(series, meta.goal);
+  });
+  $("chartsOut").innerHTML = ch;
+}
+function wireTrendDays() {
+  const seg = $("trendDays");
+  if (!seg || seg.dataset.wired) return;
+  seg.dataset.wired = "1";
+  seg.querySelectorAll(".seg-btn").forEach(b => b.addEventListener("click", () => {
+    chartDays = +b.dataset.days;
+    seg.querySelectorAll(".seg-btn").forEach(x => x.classList.toggle("active", x === b));
+    renderCharts();
+  }));
+}
 function renderHealth() {
   const t = id => (D.HEALTH_TYPES.find(x => x.id === id) || {});
+  renderPulse();
+  wireTrendDays();
   $("logForm").innerHTML = LOG_TYPES.map(id => {
     const meta = t(id);
     return '<div class="form-row"><div><label class="f">' + esc(meta.name) + " (" + esc(meta.unit) + ")" + "</label>" +
@@ -335,14 +404,7 @@ function renderHealth() {
   const avgs = H.weeklyAverages();
   const n = Object.keys(avgs).filter(k => avgs[k]).length;
   $("healthN").textContent = n + " of 5 tracked this week";
-  let ch = "";
-  ["sleep", "steps", "water", "mood", "weight"].forEach(id => {
-    const meta = t(id), series = H.trendSeries(id, 14);
-    const vals = series.map(p => p.value).filter(v => v != null);
-    ch += '<h3>' + esc(meta.name) + ' <span class="pill">' + (vals.length ? "avg " + (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1) + " " + esc(meta.unit) : "no data") + "</span></h3>";
-    ch += barChart(series, meta.goal);
-  });
-  $("chartsOut").innerHTML = ch;
+  renderCharts();
 
   const nudges = H.nudges();
   renderSleepDebt();
@@ -374,29 +436,62 @@ function barChart(series, goal) {
 // ---------- Medications ----------
 function renderMeds() {
   const today = Med.todayStr();
+  const _d = new Date();
+  const nowHM = ("0" + _d.getHours()).slice(-2) + ":" + ("0" + _d.getMinutes()).slice(-2);
+  const toMin = s => { const p = String(s).split(":"); return (+p[0]) * 60 + (+p[1]); };
   const meds = Med.listMeds();
 
-  // Today's doses
+  // ---- Today's doses: chronological timeline (Apple Health schedule style) ----
   let h = "";
+  const schedMeds = meds.filter(m => !m.prn);
   if (!meds.length) {
     h = '<div class="empty"><div class="big">No medications yet</div>Add your first one on the right.</div>';
+  } else if (!schedMeds.length) {
+    h = '<div class="empty">No scheduled doses — your as-needed meds are below.</div>';
   } else {
-    h = meds.map(m => {
-      let slots;
-      if (m.prn) {
-        const taken = Med.prnTakenOn(m, today);
-        slots = '<button class="btn btn-ghost btn-sm" data-prn="' + m.id + '">Log as-needed dose (' + taken + "/" + m.maxPerDay + " today)</button>";
-      } else {
-        slots = m.times.map(t => {
-          const taken = Med.takenOn(m, today, t);
-          return '<button class="dose-slot' + (taken ? " taken" : "") + '" data-dose="' + m.id + '" data-time="' + t + '">' +
-            esc(t) + "</button>";
-        }).join("");
-      }
+    const events = [];
+    schedMeds.forEach(m => m.times.forEach(t => events.push({ med: m, time: t, taken: Med.takenOn(m, today, t) })));
+    events.sort((a, b) => a.time < b.time ? -1 : 1);
+    const nowMin = toMin(nowHM);
+    const upcoming = events.filter(e => !e.taken && toMin(e.time) >= nowMin - 10);
+    const missedN = events.filter(e => !e.taken && toMin(e.time) < nowMin - 10).length;
+    const takenN = events.filter(e => e.taken).length;
+    const tally = takenN + " of " + events.length + " taken today";
+    if (upcoming.length) {
+      const nx = upcoming[0], diff = toMin(nx.time) - nowMin;
+      const when = diff <= 10 ? "due now" : "in " + Math.floor(diff / 60) + "h " + (diff % 60) + "m";
+      h += '<div class="next-dose"><div><strong>Next: ' + esc(nx.med.name) + " " + esc(nx.time) + "</strong> — " + when +
+        '<div class="meta">' + tally + (missedN ? " · " + missedN + " missed" : "") + "</div></div></div>";
+    } else if (missedN) {
+      h += '<div class="next-dose"><div><strong>' + missedN + " missed dose" + (missedN === 1 ? "" : "s") + " today</strong>" +
+        '<div class="meta">' + tally + "</div></div></div>";
+    } else {
+      h += '<div class="next-dose"><div><strong>All doses taken</strong><div class="meta">' + tally + "</div></div></div>";
+    }
+    const fmtIn = dm => "in " + Math.floor(dm / 60) + "h " + (dm % 60) + "m";
+    h += '<div class="tl">' + events.map(e => {
+      const dm = toMin(e.time) - nowMin;
+      const state = e.taken ? "taken" : dm < -10 ? "missed" : dm <= 10 ? "due" : "upcoming";
+      const stateTxt = e.taken ? "taken" : state === "missed" ? "missed" : state === "due" ? "due now" : fmtIn(dm);
+      return '<div class="tl-row ' + state + '"><span class="tl-dot"></span>' +
+        '<span class="tl-time">' + esc(e.time) + "</span>" +
+        '<div class="grow"><div class="title">' + esc(e.med.name) + ' <span class="meta">' + esc(e.med.dose) + "</span></div>" +
+        (e.med.notes ? '<div class="meta">' + esc(e.med.notes) + "</div>" : "") +
+        '<div class="meta">' + stateTxt + "</div></div>" +
+        '<button class="dose-check' + (e.taken ? " taken" : "") + '" data-dose="' + e.med.id + '" data-time="' + e.time +
+        '" aria-label="Toggle ' + esc(e.med.name + " " + e.time) + '"></button></div>';
+    }).join("") + "</div>";
+  }
+  const prns = meds.filter(m => m.prn);
+  if (prns.length) {
+    h += '<h3 style="margin-top:20px">As-needed</h3>' + prns.map(m => {
+      const taken = Med.prnTakenOn(m, today);
       return '<div class="med-row"><div class="grow"><div class="title">' + esc(m.name) + ' <span class="meta">' + esc(m.dose) + "</span></div>" +
         (m.notes ? '<div class="meta">' + esc(m.notes) + "</div>" : "") + "</div>" +
-        '<div class="dose-slots">' + slots + "</div></div>";
+        '<button class="btn btn-ghost btn-sm" data-prn="' + m.id + '">Log dose (' + taken + "/" + m.maxPerDay + " today)</button></div>";
     }).join("");
+  }
+  if (schedMeds.length) {
     const st = Med.streakDays(meds, today);
     if (st > 0) h += '<p class="lede">Perfect-day streak: <strong>' + st + "</strong> day" + (st === 1 ? "" : "s") + " — every scheduled dose taken.</p>";
   }
@@ -613,19 +708,64 @@ function renderResearch() {
 }
 
 // ---------- Briefing ----------
-function renderBriefing() { renderBrief(false); }
-function renderBrief(regen) {
+function showBriefTab(which) {
+  $("briefTabMorning").classList.toggle("active", which === "morning");
+  $("briefTabWeekly").classList.toggle("active", which === "weekly");
+  $("briefOut").style.display = which === "morning" ? "" : "none";
+  $("weekRevOut").style.display = which === "weekly" ? "" : "none";
+  if (which === "weekly") renderWeekReview();
+}
+function renderBriefing() { renderBrief(); }
+function renderBrief() {
   const b = P.morningBriefing();
-  $("briefGreet").textContent = b.greeting;
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  const todayISO = now.toISOString().slice(0, 10);
+
+  // Lead insight (Oura Today-tab style): missed meds first, then the top
+  // priority nudge, otherwise an honest all-clear.
+  const st = Med.dayStatus();
+  const nudges = H.nudges();
+  let lead;
+  if (st.missed.length) {
+    lead = "You have <strong>" + st.missed.length + " missed dose" + (st.missed.length === 1 ? "" : "s") + "</strong> so far: " +
+      esc(st.missed.map(x => x.name + " at " + x.time).join(", ")) + ".";
+  } else {
+    const top = nudges.find(n => n.priority === 1) || nudges[0];
+    lead = top ? "<strong>" + esc(top.title) + ".</strong> " + esc(top.detail)
+               : "All clear — nothing needs your attention right now.";
+  }
+
+  // Stat chips for the hero.
+  const chips = [];
+  const evN = Sch.listEvents(todayISO).length;
+  chips.push('<span class="hero-chip">' + evN + " event" + (evN === 1 ? "" : "s") + " today</span>");
+  const tN = Sch.listTasks("today").length;
+  chips.push('<span class="hero-chip">' + tN + " task" + (tN === 1 ? "" : "s") + " due</span>");
+  const sched = st.meds.filter(m => !m.prn);
+  if (sched.length) {
+    const tk = sched.reduce((a, m) => a + m.taken, 0);
+    const sc = sched.reduce((a, m) => a + m.scheduled, 0);
+    const cls = st.missed.length ? " alert" : (sc > 0 && tk >= sc ? " good" : "");
+    chips.push('<span class="hero-chip' + cls + '">pills ' + tk + "/" + sc + "</span>");
+  }
+  const sl = H.getLogs("sleep", 1);
+  if (sl.length) chips.push('<span class="hero-chip">slept ' + sl[sl.length - 1].value + "h</span>");
+
+  $("briefHeroOut").innerHTML = '<div class="brief-hero"><div class="kicker">' + esc(dateStr) + "</div>" +
+    "<h2>" + esc(b.greeting) + "</h2>" +
+    '<p class="lead">' + lead + "</p>" +
+    '<div class="hero-chips">' + chips.join("") + "</div></div>";
+
   $("briefOut").innerHTML = b.sections.map(s =>
-    '<div class="card"><h2>' + esc(s.title) + "</h2>" + s.lines.map(l => '<div class="list-item"><div class="grow">' + esc(l) + "</div></div>").join("") + "</div>").join("");
-  $("weekRevOut").innerHTML = "";
-  if (regen) toast("Briefing regenerated");
+    '<div class="card"><div class="kicker">' + esc(s.title) + "</div>" +
+    s.lines.map(l => '<div class="list-item"><div class="grow">' + esc(l) + "</div></div>").join("") + "</div>").join("");
+  showBriefTab("morning");
 }
 function renderWeekReview() {
   const w = P.weeklyReview();
   const avgs = w.health;
-  $("weekRevOut").innerHTML = '<div class="card"><h2>Weekly review</h2>' +
+  $("weekRevOut").innerHTML = '<div class="card"><div class="kicker">Weekly review</div>' +
     '<div class="grid3">' +
     '<div class="recipe-card"><h4>' + w.completed + "</h4><div class='meta'>tasks completed</div></div>" +
     '<div class="recipe-card"><h4>' + w.open + "</h4><div class='meta'>tasks open</div></div>" +
@@ -807,8 +947,8 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   $("medPrn").addEventListener("change", e => { $("medTimes").disabled = e.target.checked; });
 
-  $("briefGen").addEventListener("click", () => renderBrief(true));
-  $("weekRevBtn").addEventListener("click", renderWeekReview);
+  $("briefTabMorning").addEventListener("click", () => renderBrief());
+  $("briefTabWeekly").addEventListener("click", () => showBriefTab("weekly"));
 
   wireFileImports();
   renderAll();

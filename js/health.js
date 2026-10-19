@@ -291,9 +291,52 @@ function workoutWeek(todayStr) {
            pct: goal ? Math.min(100, Math.round(minutes / goal * 100)) : 0 };
 }
 
+// ---- "Today's pulse" + trend arrows (v2 redesign) ----
+
+// Today's logged value vs the daily goal for each goal-bearing metric.
+// The UI renders these as Google-Fit-style goal rings that fill as you log.
+function dailyPulse(dateKeyStr) {
+  const key = dateKeyStr || dayKey(new Date());
+  const logs = store.get("healthLogs", []);
+  return D.HEALTH_TYPES.filter(t => t.goal).map(t => {
+    const e = logs.find(l => l.type === t.id && l.date === key);
+    const value = e ? e.value : null;
+    const pct = value == null ? 0 : Math.min(100, Math.round((value / t.goal) * 100));
+    return { id: t.id, name: t.name, unit: t.unit, goal: t.goal, good: t.good,
+             value, pct, logged: value != null };
+  });
+}
+
+// Directional trend for a metric: average of the last `days` vs the average
+// of the `days` before (Apple Health "Highlights" style). Needs >=3 logged
+// days in each window to say anything honest. `better` reports whether the
+// direction is an improvement (weight is direction-neutral).
+function trendArrow(type, days) {
+  days = Math.max(1, Math.min(31, days || 7));
+  const byDay = {};
+  getLogs(type).forEach(l => { byDay[l.date] = l.value; });
+  const keyFor = off => dayKey(new Date(Date.now() - off * 864e5));
+  const avgWin = off => {
+    const vals = [];
+    for (let i = off; i < off + days; i++) {
+      const v = byDay[keyFor(i)];
+      if (v != null) vals.push(v);
+    }
+    return vals.length >= 3 ? avg(vals) : null;
+  };
+  const cur = avgWin(0), prev = avgWin(days);
+  if (cur == null || prev == null) return null;
+  const gap = Math.round((cur - prev) * 10) / 10;
+  const tol = Math.abs(prev) * 0.03;
+  const dir = gap > tol ? "up" : gap < -tol ? "down" : "flat";
+  const positive = type !== "weight";
+  return { dir, gap, current: cur, prev,
+           better: positive ? dir === "up" : null };
+}
+
 const api = { dayKey, logEntry, getLogs, weeklyAverages, trendSeries,
               parseAppleHealthXML, importAppleHealth, nudges, markStapleBought,
-              sleepDebt, sleepMoodLink,
+              sleepDebt, sleepMoodLink, dailyPulse, trendArrow,
               WORKOUT_TYPES, logWorkout, listWorkouts, deleteWorkout,
               workoutGoal, setWorkoutGoal, workoutWeek };
 

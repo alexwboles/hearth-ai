@@ -94,6 +94,12 @@
 
       <!-- HEALTH -->
       <section class="view" id="view-health">
+        <div class="card pulse-card">
+          <div class="kicker">Today's pulse</div>
+          <h2>How today is shaping up</h2>
+          <p class="lede">Your goals, as rings — they fill in as you log. Tap a ring's metric below to log it.</p>
+          <div id="pulseOut" class="pulse-rings"></div>
+        </div>
         <div class="grid2">
           <div class="card">
             <h2>Log today</h2>
@@ -133,7 +139,12 @@
         </div>
         <div class="card">
           <h2>Trends <span class="pill" id="healthN"></span></h2>
-          <p class="lede">Last 14 days. Hand-rolled charts — no external libraries.</p>
+          <p class="lede">Arrows compare the last 7 days against the 7 before — Apple's Highlights, minus the phone.</p>
+          <div class="seg" id="trendDays" role="group" aria-label="Trend period">
+            <button class="seg-btn" data-days="7">7 days</button>
+            <button class="seg-btn active" data-days="14">14 days</button>
+            <button class="seg-btn" data-days="30">30 days</button>
+          </div>
           <div id="insightOut"></div>
           <div id="sleepDebtOut"></div>
           <div id="chartsOut"></div>
@@ -296,16 +307,13 @@
 
       <!-- BRIEFING -->
       <section class="view" id="view-briefing">
-        <div class="card">
-          <h2 id="briefGreet">Morning briefing</h2>
-          <p class="lede">Your day, your tasks, your health, and what needs attention — generated from your own data.</p>
-          <div class="btn-row" style="margin-top:0;margin-bottom:16px">
-            <button class="btn btn-primary" id="briefGen">Regenerate</button>
-            <button class="btn btn-ghost" id="weekRevBtn">Weekly review</button>
-          </div>
-          <div id="briefOut"></div>
-          <div id="weekRevOut"></div>
+        <div id="briefHeroOut"></div>
+        <div class="tabs">
+          <button class="tab active" id="briefTabMorning">Morning briefing</button>
+          <button class="tab" id="briefTabWeekly">Weekly review</button>
         </div>
+        <div id="briefOut"></div>
+        <div id="weekRevOut" style="display:none"></div>
       </section>
     </div>
   </div>
@@ -321,8 +329,8 @@
 <script src="js/comms.js"></script>
 <script src="js/sheets.js"></script>
 <script src="js/research.js"></script>
-<script src="js/proactive.js"></script>
 <script src="js/meds.js"></script>
+<script src="js/proactive.js"></script>
 <script src="js/chat.js"></script>
 <script src="js/app.js"></script>
 </body>

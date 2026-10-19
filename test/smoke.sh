@@ -376,5 +376,33 @@ console.log('OK');
 " || fail "chat meds intent"
 pass "chat answers \"did I take my pills?\" with status + meds view"
 
+# 25: v2 redesign — pulse rings, trend arrows, meds timeline, briefing hero
+for id in pulseOut trendDays briefHeroOut briefTabMorning briefTabWeekly briefOut weekRevOut; do
+  grep -q "id=\"$id\"" index.html || fail "missing v2 UI id: $id"
+done
+for c in pulse-rings seg-btn trend tl-row dose-check brief-hero hero-chip next-dose ring-num; do
+  grep -q "$c" css/style.css || fail "missing v2 css: $c"
+done
+grep -q "dailyPulse" js/health.js || fail "dailyPulse missing"
+grep -q "trendArrow" js/health.js js/app.js || fail "trendArrow missing"
+node -e "
+const store = require('./js/store.js'); store.resetForTests(); store.createProfile('H');
+const health = require('./js/health.js');
+health.logEntry('steps', 4000);
+const p = health.dailyPulse().find(x => x.id === 'steps');
+if (p.pct !== 50 || !p.logged) throw new Error('dailyPulse: ' + JSON.stringify(p));
+if (health.trendArrow('sleep', 7) !== null) throw new Error('trendArrow should be null without data');
+// proactive briefing must be deterministic in the injected time
+const meds = require('./js/meds.js');
+const proactive = require('./js/proactive.js');
+const today = meds.todayStr();
+meds.addMed({ name: 'EveningMed', dose: '1', times: ['20:00'], pillsRemaining: 10, refillThreshold: 2, today });
+const early = proactive.morningBriefing(new Date(today + 'T08:30:00'));
+const sec = early.sections.find(s => s.title === 'Medications');
+if (sec && sec.lines.some(l => l.indexOf('Missed') !== -1)) throw new Error('briefing flagged a miss at 08:30');
+console.log('OK: pulse, arrows, deterministic briefing');
+" || fail "v2 health logic"
+pass "v2: pulse rings, trend arrows, meds timeline, briefing hero wired + logic"
+
 echo ""
 echo "All $npass smoke checks passed."

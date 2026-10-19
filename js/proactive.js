@@ -46,7 +46,7 @@ function morningBriefing(now) {
   if (sleep.length)
     sections.push({ title: "Last night", lines: ["You logged " + sleep[sleep.length - 1].value + "h of sleep."] });
 
-  const st = meds.dayStatus(today);
+  const st = meds.dayStatus(today, ("0" + now.getHours()).slice(-2) + ":" + ("0" + now.getMinutes()).slice(-2));
   const medLines = [];
   if (st.missed.length)
     medLines.push("Missed: " + st.missed.map(x => x.name + " at " + x.time).join(", "));
