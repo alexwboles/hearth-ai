@@ -266,3 +266,15 @@ table.data tr:last-child td { border-bottom: 0; }
 .workout-meta .good { color: var(--good); }
 .workout-list { margin-top: 6px; }
 .list-item.slim { padding: 8px 12px; }
+
+/* medications */
+.med-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border-soft); }
+.med-row:last-child { border-bottom: 0; }
+.dose-slots { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+.dose-slot {
+  border: 1px solid var(--border); background: #fff; color: var(--text);
+  font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 0; cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.dose-slot:hover { border-color: var(--accent); color: var(--accent-dark); }
+.dose-slot.taken { background: var(--accent); border-color: var(--accent); color: #fff; }

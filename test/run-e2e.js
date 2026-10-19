@@ -12,6 +12,7 @@ const sheets = require("../js/sheets.js");
 const research = require("../js/research.js");
 const proactive = require("../js/proactive.js");
 const chat = require("../js/chat.js");
+const meds = require("../js/meds.js");
 
 let n = 0;
 function ok(name, fn) {
@@ -312,6 +313,46 @@ ok("recurring tasks + chat workout/repeat intents", () => {
   const r = chat.respond("log workout 45 minutes strength");
   assert.ok(r.reply.indexOf("45 min strength") !== -1, "chat logs the workout: " + r.reply);
   assert.strictEqual(health.workoutWeek().minutes, 45);
+});
+
+// 16. Medications (merged from medtrack-ai): add, check off, refill math, briefing + chat surface.
+ok("medications: dose check-off, refill math, briefing + chat", () => {
+  store.createProfile("H");
+  const day = (off) => new Date(Date.now() - off * 864e5).toISOString().slice(0, 10);
+  const today = day(0);
+  const m = meds.addMed({ name: "Lisinopril", dose: "10mg", times: ["08:00", "20:00"],
+                          pillsRemaining: 30, refillThreshold: 7, today });
+  assert.strictEqual(meds.daysLeft(meds.listMeds()[0]), 15, "30 pills / 2 per day");
+  meds.logDose(m.id, today, "08:00");
+  assert.strictEqual(meds.listMeds()[0].pillsRemaining, 29);
+  // Morning briefing should NOT flag a miss before the evening dose is due.
+  const brief = proactive.morningBriefing(new Date(today + "T08:30:00"));
+  const medSection = brief.sections.find(s => s.title === "Medications");
+  assert.ok(!medSection || !medSection.lines.some(l => l.indexOf("Missed") !== -1),
+    "nothing missed at 08:30: " + JSON.stringify(brief.sections));
+  // End of day: 08:00 dose logged, 20:00 dose missed -> briefing flags it.
+  const brief2 = proactive.morningBriefing(new Date(today + "T21:00:00"));
+  const sec2 = brief2.sections.find(s => s.title === "Medications");
+  assert.ok(sec2 && sec2.lines.some(l => l.indexOf("Lisinopril") !== -1 && l.indexOf("20:00") !== -1),
+    "briefing flags the missed evening dose: " + JSON.stringify(brief2.sections));
+  // Chat: "did I take my pills?"
+  const r = chat.respond("did i take my pills");
+  assert.ok(r.reply.indexOf("Lisinopril") !== -1, "chat names the med");
+  assert.ok(r.reply.indexOf("1/2 today") !== -1, "chat shows today's progress: " + r.reply);
+  assert.strictEqual(r.view, "meds");
+  // Refill math: run the bottle low, board fires the alert.
+  meds.refillMed(m.id, 4);
+  const low = meds.refillBoard(today).find(x => x.name === "Lisinopril");
+  assert.strictEqual(low.daysLeft, 2, "4 pills / 2 per day");
+  assert.strictEqual(low.alert, true, "2 days <= 7-day threshold");
+  assert.ok(low.orderNow, "order-by date is today-or-past with 3-day lead");
+  // Adherence over 7 days: backfill the last 3 days fully, miss one today.
+  for (let i = 3; i >= 1; i--) {
+    meds.logDose(m.id, day(i), "08:00");
+    meds.logDose(m.id, day(i), "20:00");
+  }
+  const a = meds.adherence(meds.listMeds().find(x => x.id === m.id), 7, today);
+  assert.strictEqual(a, 88, "7/8 scheduled doses taken, got " + a);
 });
 
 console.log("\\nAll " + n + " e2e flows passed.");

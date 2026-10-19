@@ -14,7 +14,8 @@ A chat-first personal hub for health and home life. Talk to Hearth and it **plan
 - **Comms** — email reply drafter (5 templates × 3 tones), phone call script generator (3 scenarios), follow-up queue. Drafts approve; nothing sends.
 - **Sheets** — editable grid, add rows/columns, CSV import/export (handles quotes, commas, newlines).
 - **Research** — structured brief generator (quick/standard/deep) with honest disclosure that briefs are template-drafted locally.
-- **Briefing** — morning briefing combining calendar, due tasks, conflicts, health, grocery carts; weekly review with completion stats.
+- **Briefing** — morning briefing combining calendar, due tasks, conflicts, health, grocery carts, **medications**; weekly review with completion stats.
+- **Medications** — dose check-off (tap a time slot, tap again to undo), refill math (days remaining ÷ doses per day, order-by date with lead time), 7-day adherence %, perfect-day streaks, and as-needed (PRN) dosing with daily caps. Surfaced in the morning briefing and in chat ("did I take my pills?"). *Merged from medtrack-ai — that project is retired and archived.*
 
 ## Stack
 
@@ -27,8 +28,8 @@ python3 -m http.server 8080   # then open http://localhost:8080
 ## Tests
 
 ```bash
-test/smoke.sh   # 13 fast checks: files, syntax, logic spot-checks, design + privacy greps
-test/e2e.sh     # 8 realistic flows through the logic layer (node)
+test/smoke.sh   # 22 fast checks: files, syntax, logic spot-checks, design + privacy greps
+test/e2e.sh     # 16 realistic flows through the logic layer (node)
 ```
 
 ## Roadmap (hosted upgrades)

@@ -144,6 +144,53 @@
         </div>
       </section>
 
+      <!-- MEDICATIONS -->
+      <section class="view" id="view-meds">
+        <div class="notice"><strong>Reminder organizer only.</strong> Hearth is not medical advice — always follow your prescriber's instructions. Merged from the retired medtrack-ai project.</div>
+        <div class="grid2">
+          <div class="card">
+            <h2>Today's doses</h2>
+            <p class="lede">Tap a time slot to check off a dose; tap again to undo. The pill count drops automatically.</p>
+            <div id="medsTodayOut"></div>
+          </div>
+          <div class="card">
+            <h2>Refills</h2>
+            <p class="lede">Days left = pills remaining ÷ doses per day. Reorder before the order-by date.</p>
+            <div id="medsRefillOut"></div>
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="card">
+            <h2>Add medication</h2>
+            <div class="form-row">
+              <div style="flex:2"><input type="text" id="medName" placeholder="Name (e.g. Lisinopril)"></div>
+              <div><input type="text" id="medDose" placeholder="Dose (e.g. 10mg)"></div>
+            </div>
+            <div class="form-row">
+              <div><input type="text" id="medTimes" placeholder="Times, HH:MM comma separated"></div>
+              <div><input type="number" id="medPills" min="0" step="1" placeholder="Pills on hand"></div>
+            </div>
+            <div class="form-row">
+              <div><input type="text" id="medNotes" placeholder="Notes, optional (e.g. take with food)"></div>
+              <div style="flex:0"><button class="btn btn-primary" id="medAdd">Add</button></div>
+            </div>
+            <div class="form-row">
+              <label class="list-item slim" style="cursor:pointer;flex:1"><input type="checkbox" id="medPrn"> <span class="grow">As-needed (no fixed schedule)</span></label>
+              <div><input type="number" id="medMaxPerDay" min="1" step="1" placeholder="Max/day"></div>
+              <div><input type="number" id="medThreshold" min="0" step="1" placeholder="Refill alert (days, default 7)"></div>
+            </div>
+          </div>
+          <div class="card">
+            <h2>7-day adherence</h2>
+            <div id="medsAdhOut"></div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Your medications</h2>
+          <div id="medsListOut"></div>
+        </div>
+      </section>
+
       <!-- SCHEDULE -->
       <section class="view" id="view-schedule">
         <div class="grid2">
@@ -275,6 +322,7 @@
 <script src="js/sheets.js"></script>
 <script src="js/research.js"></script>
 <script src="js/proactive.js"></script>
+<script src="js/meds.js"></script>
 <script src="js/chat.js"></script>
 <script src="js/app.js"></script>
 </body>

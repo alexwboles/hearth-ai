@@ -4,6 +4,7 @@
 
 const schedule = (typeof require !== "undefined") ? require("./schedule.js") : window.HearthSchedule;
 const health = (typeof require !== "undefined") ? require("./health.js") : window.HearthHealth;
+const meds = (typeof require !== "undefined") ? require("./meds.js") : window.HearthMeds;
 const store = (typeof require !== "undefined") ? require("./store.js") : window.HearthStore;
 
 function greetingFor(hour) {
@@ -44,6 +45,17 @@ function morningBriefing(now) {
 
   if (sleep.length)
     sections.push({ title: "Last night", lines: ["You logged " + sleep[sleep.length - 1].value + "h of sleep."] });
+
+  const st = meds.dayStatus(today);
+  const medLines = [];
+  if (st.missed.length)
+    medLines.push("Missed: " + st.missed.map(x => x.name + " at " + x.time).join(", "));
+  const soon = st.dueSoon.filter(d => !d.overdue);
+  if (soon.length)
+    medLines.push("Coming up: " + soon.map(d => d.name + " " + d.dose + " at " + d.time).join(", "));
+  if (st.refills.length)
+    medLines.push("Refill: " + st.refills.map(x => x.name + " — " + x.daysLeft + " days left" + (x.orderNow ? ", order today" : "")).join("; "));
+  if (medLines.length) sections.push({ title: "Medications", lines: medLines });
 
   const topNudges = nudges.slice(0, 3);
   if (topNudges.length)

@@ -8,7 +8,7 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp
 const S = window.HearthStore, D = window.HearthData, M = window.HearthMeals,
       H = window.HearthHealth, Sch = window.HearthSchedule, C = window.HearthComms,
       Sh = window.HearthSheets, R = window.HearthResearch, P = window.HearthProactive,
-      Chat = window.HearthChat;
+      Med = window.HearthMeds, Chat = window.HearthChat;
 
 let toastTimer = null;
 function toast(msg) {
@@ -29,12 +29,14 @@ const ICONS = {
   comms: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="12" height="9"/><path d="M2.5 5l5.5 4 5.5-4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   sheets: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12"/><path d="M2 6h12M6 2v12" /></svg>',
   research: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14" stroke-linecap="round"/></svg>',
+  meds: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="5.5" width="12" height="5" transform="rotate(-30 8 8)" stroke-linejoin="round"/><path d="M6.2 6.2l3.6 3.6" stroke-linecap="round"/></svg>',
   briefing: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 13h10M4 13V6l4-3 4 3v7" stroke-linejoin="round"/><path d="M8 1.5v1.5" stroke-linecap="round"/></svg>'
 };
 const VIEWS = [
   ["chat", "Chat", "Talk to Hearth"],
   ["meals", "Meals & Groceries", "Plan meals, build the list, prep the cart"],
   ["health", "Health", "Logs, trends and predictive nudges"],
+  ["meds", "Medications", "Dose check-off, refills and adherence"],
   ["schedule", "Schedule", "Tasks, calendar and meeting prep"],
   ["comms", "Comms", "Draft emails and call scripts — you approve"],
   ["sheets", "Sheets", "Editable grids with CSV import/export"],
@@ -55,6 +57,7 @@ function showView(id) {
   $("viewSub").textContent = v[2];
   if (id === "meals") renderMeals();
   if (id === "health") renderHealth();
+  if (id === "meds") renderMeds();
   if (id === "schedule") renderSchedule();
   if (id === "comms") renderComms();
   if (id === "sheets") renderSheets();
@@ -77,7 +80,7 @@ function switchProfileTo(id) {
 }
 
 // ---------- Chat ----------
-const QUICK = ["Morning briefing", "Plan my meals this week", "Log 7 hours of sleep", "What nudges do you have?", "Draft email", "Research robot vacuum"];
+const QUICK = ["Morning briefing", "Plan my meals this week", "Did I take my pills?", "Log 7 hours of sleep", "What nudges do you have?", "Draft email", "Research robot vacuum"];
 function renderChat() {
   $("chatQuick").innerHTML = QUICK.map(q => '<button class="chip" data-q="' + esc(q) + '">' + esc(q) + "</button>").join("");
   $("chatQuick").querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => sendChat(c.dataset.q)));
@@ -368,6 +371,85 @@ function barChart(series, goal) {
     '<line class="axis" x1="0" x2="' + W + '" y1="' + (Ht - 14) + '" y2="' + (Ht - 14) + '"/></svg>';
 }
 
+// ---------- Medications ----------
+function renderMeds() {
+  const today = Med.todayStr();
+  const meds = Med.listMeds();
+
+  // Today's doses
+  let h = "";
+  if (!meds.length) {
+    h = '<div class="empty"><div class="big">No medications yet</div>Add your first one on the right.</div>';
+  } else {
+    h = meds.map(m => {
+      let slots;
+      if (m.prn) {
+        const taken = Med.prnTakenOn(m, today);
+        slots = '<button class="btn btn-ghost btn-sm" data-prn="' + m.id + '">Log as-needed dose (' + taken + "/" + m.maxPerDay + " today)</button>";
+      } else {
+        slots = m.times.map(t => {
+          const taken = Med.takenOn(m, today, t);
+          return '<button class="dose-slot' + (taken ? " taken" : "") + '" data-dose="' + m.id + '" data-time="' + t + '">' +
+            esc(t) + "</button>";
+        }).join("");
+      }
+      return '<div class="med-row"><div class="grow"><div class="title">' + esc(m.name) + ' <span class="meta">' + esc(m.dose) + "</span></div>" +
+        (m.notes ? '<div class="meta">' + esc(m.notes) + "</div>" : "") + "</div>" +
+        '<div class="dose-slots">' + slots + "</div></div>";
+    }).join("");
+    const st = Med.streakDays(meds, today);
+    if (st > 0) h += '<p class="lede">Perfect-day streak: <strong>' + st + "</strong> day" + (st === 1 ? "" : "s") + " — every scheduled dose taken.</p>";
+  }
+  $("medsTodayOut").innerHTML = h;
+  $("medsTodayOut").querySelectorAll("[data-dose]").forEach(b => b.addEventListener("click", () => {
+    const r = Med.logDose(b.dataset.dose, today, b.dataset.time);
+    if (r.already) Med.undoDose(b.dataset.dose, today, b.dataset.time);
+    renderMeds();
+  }));
+  $("medsTodayOut").querySelectorAll("[data-prn]").forEach(b => b.addEventListener("click", () => {
+    try { Med.logPrnDose(b.dataset.prn, today); renderMeds(); toast("Dose logged"); }
+    catch (e) { toast(e.message); }
+  }));
+
+  // Refills
+  const board = Med.refillBoard(today);
+  $("medsRefillOut").innerHTML = board.length ? board.map(x =>
+    '<div class="med-row"><div class="grow"><div class="title">' + esc(x.name) + ' <span class="meta">' + esc(x.dose) + "</span></div>" +
+    '<div class="meta">' + x.pillsRemaining + " pills left · " + x.daysLeft + " days · order by " + esc(x.orderBy) + "</div></div>" +
+    (x.alert || x.orderNow ? '<span class="pill bad">refill</span>' : '<span class="pill good">ok</span>') + "</div>"
+  ).join("") : '<div class="empty">Nothing to refill.</div>';
+
+  // 7-day adherence
+  $("medsAdhOut").innerHTML = meds.filter(m => !m.prn).length
+    ? meds.filter(m => !m.prn).map(m => {
+        const a = Med.adherence(m, 7, today);
+        const pct = a == null ? 0 : a;
+        return '<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:14px">' +
+          "<span><strong>" + esc(m.name) + "</strong> <span class='meta'>" + esc(m.dose) + "</span></span>" +
+          '<span class="' + (a != null && a < 70 ? "over" : "") + '">' + (a == null ? "no data" : a + "%") + "</span></div>" +
+          '<div class="meter"><div class="meter-fill' + (a != null && a < 70 ? " bad" : "") + '" style="width:' + pct + '%"></div></div></div>';
+      }).join("")
+    : '<div class="empty">Add a scheduled medication to see adherence.</div>';
+
+  // Manage list
+  $("medsListOut").innerHTML = meds.length ? meds.map(m =>
+    '<div class="med-row"><div class="grow"><div class="title">' + esc(m.name) + ' <span class="meta">' + esc(m.dose) +
+    (m.prn ? " · as-needed, max " + m.maxPerDay + "/day" : " · " + m.times.join(", ")) + "</span></div>" +
+    '<div class="meta">' + m.pillsRemaining + " pills on hand" + (m.notes ? " · " + esc(m.notes) : "") + "</div></div>" +
+    '<button class="btn btn-ghost btn-sm" data-refill="' + m.id + '">Log refill</button> ' +
+    '<button class="btn btn-danger-ghost btn-sm" data-delmed="' + m.id + '">Delete</button></div>'
+  ).join("") : '<div class="empty">No medications.</div>';
+  $("medsListOut").querySelectorAll("[data-delmed]").forEach(b => b.addEventListener("click", () => {
+    if (confirm("Delete this medication and its dose history?")) { Med.deleteMed(b.dataset.delmed); renderMeds(); }
+  }));
+  $("medsListOut").querySelectorAll("[data-refill]").forEach(b => b.addEventListener("click", () => {
+    const count = prompt("New pill count after refill:", "");
+    if (count == null || count === "") return;
+    try { Med.refillMed(b.dataset.refill, count); renderMeds(); toast("Refill logged"); }
+    catch (e) { toast(e.message); }
+  }));
+}
+
 // ---------- Schedule ----------
 function renderSchedule() {
   renderTasks(); renderEvents();
@@ -590,7 +672,7 @@ function wireFileImports() {
 // ---------- Init ----------
 function renderAll() {
   refreshProfiles();
-  renderChat(); renderMeals(); renderHealth(); renderSchedule();
+  renderChat(); renderMeals(); renderHealth(); renderMeds(); renderSchedule();
   renderComms(); renderSheets(); renderResearch(); renderBriefing();
 }
 
@@ -705,6 +787,25 @@ document.addEventListener("DOMContentLoaded", () => {
       renderResearch(); toast("Brief generated");
     } catch (e) { toast(e.message); }
   });
+
+  $("medAdd").addEventListener("click", () => {
+    const prn = $("medPrn").checked;
+    const times = $("medTimes").value.split(",").map(s => s.trim()).filter(Boolean);
+    try {
+      Med.addMed({
+        name: $("medName").value, dose: $("medDose").value,
+        times: prn ? [] : times, prn,
+        maxPerDay: $("medMaxPerDay").value === "" ? 1 : $("medMaxPerDay").value,
+        pillsRemaining: $("medPills").value === "" ? 0 : $("medPills").value,
+        refillThreshold: $("medThreshold").value === "" ? 7 : $("medThreshold").value,
+        notes: $("medNotes").value
+      });
+      ["medName", "medDose", "medTimes", "medPills", "medNotes", "medMaxPerDay", "medThreshold"].forEach(id => $(id).value = "");
+      $("medPrn").checked = false;
+      renderMeds(); toast("Medication added");
+    } catch (e) { toast(e.message); }
+  });
+  $("medPrn").addEventListener("change", e => { $("medTimes").disabled = e.target.checked; });
 
   $("briefGen").addEventListener("click", () => renderBrief(true));
   $("weekRevBtn").addEventListener("click", renderWeekReview);

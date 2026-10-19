@@ -7,7 +7,7 @@ pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; exit 1; }
 
 # 1: required files exist
-for f in index.html css/style.css js/data.js js/store.js js/meals.js js/health.js js/schedule.js js/comms.js js/sheets.js js/research.js js/proactive.js js/chat.js js/app.js README.md test/e2e.sh test/run-e2e.js; do
+for f in index.html css/style.css js/data.js js/store.js js/meals.js js/health.js js/meds.js js/schedule.js js/comms.js js/sheets.js js/research.js js/proactive.js js/chat.js js/app.js README.md test/e2e.sh test/run-e2e.js; do
   [ -f "$f" ] || fail "missing file $f"
 done
 pass "all required files exist"
@@ -16,7 +16,7 @@ pass "all required files exist"
 for f in js/*.js test/run-e2e.js; do
   node --check "$f" || fail "syntax error in $f"
 done
-pass "JS syntax valid (11 files)"
+pass "JS syntax valid ($(ls js/*.js test/run-e2e.js | wc -l) files)"
 
 # 3: recipe bank sanity
 node -e "
@@ -312,3 +312,65 @@ if (!c.includes('.nav-btn .nav-ico')) throw new Error('no nav-ico css');
 if (!c.includes('border-left: 3px solid var(--accent)')) throw new Error('no chat accent bar');
 console.log('OK');" || fail "sharp geometry + dark sidebar css"
 pass "sharp geometry + dark sidebar css"
+
+# 20: medications — dose check-off, refill math, adherence, validation, per-profile isolation
+node -e "
+const store = require('./js/store.js'); store.resetForTests(); store.createProfile('H');
+const meds = require('./js/meds.js');
+const fresh = (id) => meds.listMeds().find(x => x.id === id);
+const m = meds.addMed({ name: 'Lisinopril', dose: '10mg', times: ['08:00', '20:00'], pillsRemaining: 30, today: '2026-10-15' });
+if (meds.daysLeft(fresh(m.id)) !== 15) throw new Error('daysLeft wrong');
+meds.logDose(m.id, '2026-10-15', '08:00');
+if (fresh(m.id).pillsRemaining !== 29) throw new Error('check-off did not decrement');
+meds.logDose(m.id, '2026-10-15', '20:00');
+const st = meds.dayStatus('2026-10-15', '21:00');
+if (st.meds[0].taken !== 2 || !st.meds[0].allTaken) throw new Error('day status');
+if (st.missed.length !== 0) throw new Error('false missed dose');
+if (meds.adherence(fresh(m.id), 7, '2026-10-15') !== 100) throw new Error('adherence');
+if (meds.refillAlert(fresh(m.id)) !== false) throw new Error('false refill alert');
+meds.undoDose(m.id, '2026-10-15', '08:00');
+if (fresh(m.id).pillsRemaining !== 29) throw new Error('undo did not restore');
+const prn = meds.addMed({ name: 'Ibuprofen', dose: '200mg', prn: true, maxPerDay: 3, pillsRemaining: 20, today: '2026-10-15' });
+meds.logPrnDose(prn.id, '2026-10-15');
+if (meds.prnTakenOn(fresh(prn.id), '2026-10-15') !== 1) throw new Error('prn log');
+const r = meds.refillMed(m.id, 90);
+if (r.pillsRemaining !== 90) throw new Error('refill');
+let threw = false;
+try { meds.addMed({ name: '', dose: 'x', times: ['09:00'], pillsRemaining: 5 }); } catch (e) { threw = true; }
+if (!threw) throw new Error('empty name accepted');
+threw = false;
+try { meds.logDose(m.id, '2026-10-15', '99:99'); } catch (e) { threw = true; }
+if (!threw) throw new Error('unscheduled slot accepted');
+store.createProfile('B');
+store.switchProfile(store.listProfiles().find(p => p.name === 'B').id);
+if (meds.listMeds().length !== 0) throw new Error('meds leaked across profiles');
+console.log('OK: dose check-off, refill math, adherence, validation, isolation');
+" || fail "medications logic"
+pass "medications: dose check-off, refill math, adherence, validation, per-profile isolation"
+
+# 21: UI wiring — medications view
+grep -q 'id="view-meds"' index.html || fail "view-meds missing"
+for id in medsTodayOut medsRefillOut medsAdhOut medsListOut medName medDose medTimes medPills medNotes medAdd medPrn medMaxPerDay medThreshold; do
+  grep -q "id=\"$id\"" index.html || fail "missing UI id: $id"
+done
+grep -q 'src="js/meds.js"' index.html || fail "meds.js script tag missing"
+grep -q 'require("../js/meds.js")\|require("./meds.js")\|js/meds.js' test/run-e2e.js test/smoke.sh || fail "meds.js not wired in tests"
+pass "medications UI wired (view, forms, script tag)"
+
+# 22: chat understands medication questions
+node -e "
+const chat = require('./js/chat.js');
+['did i take my pills', 'did i take my pills?', 'how are my medications', 'refill status', 'my pills'].forEach(q => {
+  if (chat.parseIntent(q).intent !== 'meds_status') throw new Error('intent miss: ' + q);
+});
+const store = require('./js/store.js'); store.resetForTests(); store.createProfile('H');
+const r = chat.respond('did i take my pills');
+if (r.reply.indexOf('No medications tracked yet') === -1) throw new Error('empty-state reply: ' + r.reply);
+const meds = require('./js/meds.js');
+meds.addMed({ name: 'Lisinopril', dose: '10mg', times: ['08:00'], pillsRemaining: 30, refillThreshold: 7, today: meds.todayStr() });
+const r2 = chat.respond('did i take my pills');
+if (r2.reply.indexOf('Lisinopril') === -1 || r2.reply.indexOf('days left') === -1) throw new Error('status reply: ' + r2.reply);
+if (r2.view !== 'meds') throw new Error('meds_status should open the meds view');
+console.log('OK');
+" || fail "chat meds intent"
+pass "chat answers \"did I take my pills?\" with status + meds view"
