@@ -3,7 +3,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-pass() { echo "PASS: $1"; }
+npass=0
+pass() { npass=$((npass + 1)); echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; exit 1; }
 
 # 1: required files exist
@@ -290,7 +291,7 @@ console.log('OK');
 pass "sleep-mood insight, workout log with weekly goal, recurring tasks"
 
 echo ""
-echo "All 19 smoke checks passed."
+echo "All $npass smoke checks passed (pre-redesign-sweep suite)."
 
 # redesign sweep: icon nav, dark sidebar, sharp geometry
 node -e "
@@ -374,3 +375,6 @@ if (r2.view !== 'meds') throw new Error('meds_status should open the meds view')
 console.log('OK');
 " || fail "chat meds intent"
 pass "chat answers \"did I take my pills?\" with status + meds view"
+
+echo ""
+echo "All $npass smoke checks passed."
